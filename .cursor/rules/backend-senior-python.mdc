@@ -1,0 +1,30 @@
+---
+description: Senior FastAPI/Python conventions for the Thibitisha backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend (FastAPI) — senior bar
+
+## Structure
+
+- Routes: HTTP + authz only. Business logic in `services/`. Persistence via models/session.
+- Pydantic for request/response; SQLAlchemy for persistence — do not leak ORM into responses casually.
+- Dependencies for DB, current user, and role gates (`require_roles`).
+
+## API design
+
+- Stable `/api/...` prefixes; consistent error `detail` strings; correct HTTP status codes.
+- Pagination on list endpoints (`page`, `page_size`, caps).
+- Idempotency where duplicates hurt (apply once, one open assessment per skill).
+
+## Reliability
+
+- Narrow `try/except`; map infra failures to 503, validation to 4xx.
+- Transactions: mutate → commit once; rollback on IntegrityError / Gemini failure mid-flow.
+- No blocking AI work without timeouts/limits; surface `GeminiError` cleanly.
+
+## What “done” looks like
+
+- Input validation, authz, happy path, conflict/empty paths, and logging of failures (no secrets).
+- Config via `Settings`; no magic numbers scattered — use `config.settings`.

@@ -1,0 +1,26 @@
+---
+description: Security baseline and gap awareness for Thibitisha Skills
+alwaysApply: true
+---
+
+# Security baseline
+
+Treat every request, upload, and Gemini prompt as untrusted.
+
+## Must enforce
+
+- **AuthN**: JWT verified; check revocation; reject inactive users.
+- **AuthZ**: Role checks on every mutating route; object-level checks (own resource / employer’s job).
+- **Secrets**: Only via env / secret manager; never commit `.env` with real keys. Never print, quote, or echo secret values in chat, logs, or commits (see `secrets-and-sensitive-data` rule).
+- **Uploads**: Type, size, and content checks; store outside web root; unique names.
+- **AI**: Fence untrusted text; never execute model output; validate JSON with schemas.
+- **PII**: Email/phone only to authorized viewers; public profiles strip contact by default.
+- **Rate limits**: Assessments, login, upload, and AI endpoints need limits (app or gateway).
+
+## Known product surfaces to harden
+
+Auth, CV upload/analyze, assessments/submit, job apply, admin user/role changes, leaderboard PII.
+
+## When implementing or reviewing
+
+Run or follow `.cursor/skills/company-production-gate` / quality MCP tools. Report gaps as Critical / High / Medium / Low with a concrete fix — never “looks fine” without evidence.

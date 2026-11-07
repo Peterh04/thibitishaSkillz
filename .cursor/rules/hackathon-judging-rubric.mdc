@@ -1,0 +1,60 @@
+---
+description: Full hackathon judging rubric — maximize every criterion with evidence
+alwaysApply: true
+---
+
+# Judging rubric (build for Excellent / 5s)
+
+Scale: 1 Poor → 5 Excellent. Prefer a **focused, working MVP** over an incomplete ambition. ML is optional — judge tech by relevance. Award credit only for **demonstrable evidence**. Be transparent about AI usage; validate AI output.
+
+## Score targets (100 pts)
+
+### 1. Problem Understanding & Relevance — 15
+- Clear problem + target users (seekers prove skills; employers hire on verified signal) — 5
+- Solution relevance (CV → assess → verify → match/apply) — 5
+- Causes/constraints/context (CV fraud, weak signals, AI trust) — 5
+
+### 2. Data Quality, Analysis & Signal — 10
+- Appropriate sources (CV text, assessment answers, verified scores, job requirements) — 3
+- Cleaning/quality (PDF text checks, schema validation, skill text support) — 2
+- Meaningful signals/features (verified %, match weights, rankings) — 3
+- Correct interpretation (pass mark, level caps, is_current) — 2  
+  *SE lens: DB design, APIs, structures — not mandatory ML.*
+
+### 3. Software Engineering & Technical Execution — 25
+- Working prototype completeness (main journeys) — 9
+- Architecture & tech choices (FastAPI, MySQL, React, Gemini where it fits) — 6
+- Code quality, modularity, maintainability — 5
+- UX / usability / interface craft (no slop) — 5
+
+### 4. Validation, Testing & Evidence — 15
+- Functional/system tests — 4
+- Evidence it works (demo scripts, screenshots, test output) — 5
+- Metrics/interpretation (pass rate, match score, workflow success) — 4
+- Limitations, assumptions, failure cases named — 2
+
+### 5. Proof of Demand & Practical Impact — 10
+- Evidence of need (hiring/skills verification pain) — 4
+- Improves a real process vs CVs alone — 3
+- Feasibility, scalability, sustainability — 3
+
+### 6. Relevance & Readiness to Deploy — 15
+- Usable today without the team — 5
+- Deployed/deployable (link, setup, config) — 4
+- Reliable main path (errors handled, no crashes) — 3
+- Relevant now + small named polish list — 3  
+  *Judge what exists now, not the roadmap.*
+
+### 7. Presentation, Communication & Transparency — 10
+- Clear problem/solution story — 3
+- Effective live demo of working product — 3
+- Explain technical decisions & results — 2
+- Limitations, assumptions, AI usage disclosed — 2
+
+## Tie-breakers (in order)
+More event tools used → Readiness → Validation/Evidence → SE execution → Demand/Impact → overall real-world value.
+
+## How to work
+- Ship end-to-end seeker + employer paths before polish theater.
+- Keep evidence: tests, demo script, README, known limitations, AI disclosure.
+- Call MCP `judging_scorecard` when prioritizing work; close gaps that cost the most points first.

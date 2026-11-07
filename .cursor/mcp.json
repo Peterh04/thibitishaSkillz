@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "thibitisha-quality": {
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["${workspaceFolder}/tools/quality-mcp/server.py"]
+    }
+  }
+}
