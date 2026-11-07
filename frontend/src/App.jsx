@@ -19,7 +19,7 @@ function App() {
         <Route path="/" element={<JobsPage />} />
         <Route path="/apply" element={<ApplyPage />} />
         <Route path="/interview" element={<InterviewPage />} />
-        <Route path="/shortlisted" element={<RecruiterDashboard />} />
+        <Route path="recruiter/shortlisted" element={<RecruiterDashboard />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/recruiter" element={<RecruiterHome />} />
         <Route path="/recruiter/jobs" element={<RecruiterJobs />} />
