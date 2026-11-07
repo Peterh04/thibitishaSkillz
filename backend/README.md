@@ -51,6 +51,8 @@ backend/
 │   ├── gemini_service.py      # Google Gemini API integration (CV analysis, question gen, answer eval)
 │   ├── msingi_service.py      # MsingiAI TTS/STT client (server-side API key only)
 │   ├── voice_interview_service.py  # Spoken interview orchestration
+│   ├── sms_service.py         # ThriveVas SMS client (disabled until working API key)
+│   ├── notification_service.py # Stage SMS to candidates / employers
 │   ├── cv_service.py          # PDF/DOCX text extraction and CV analysis orchestration
 │   ├── assessment_service.py  # Assessment scoring, verification levels, and leaderboard ranking
 │   └── matching_service.py    # Weighted matching of verified candidate skills to job requirements

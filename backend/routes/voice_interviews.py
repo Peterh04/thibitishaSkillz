@@ -20,32 +20,39 @@ from backend.services import voice_interview_service as voice_svc
 router = APIRouter(prefix="/api", tags=["Voice Interviews"])
 
 
-def _feedback_for_client(raw: str | None, *, completed: bool) -> str | None:
+def _turn_meta(raw: str | None) -> dict:
     if not raw:
-        return None
+        return {}
     try:
         import json
 
         data = json.loads(raw)
-        if isinstance(data, dict):
-            if "expected_answer_sw" in data and "feedback_sw" not in data and not completed:
-                return None
-            sw = data.get("feedback_sw") or ""
-            en = data.get("feedback_en") or ""
-            if sw and en:
-                return f"{sw} / {en}"
-            return sw or en or None
+        return data if isinstance(data, dict) else {}
     except Exception:
-        pass
+        return {}
+
+
+def _feedback_for_client(raw: str | None, *, completed: bool) -> str | None:
+    data = _turn_meta(raw)
+    if data:
+        if "feedback_sw" not in data and "feedback_en" not in data and not completed:
+            return None
+        sw = data.get("feedback_sw") or ""
+        en = data.get("feedback_en") or ""
+        if sw and en:
+            return f"{sw} / {en}"
+        return sw or en or None
     return raw if completed else None
 
 
 def _turn_out(turn, *, completed: bool) -> VoiceInterviewTurnPublic:
+    meta = _turn_meta(turn.feedback)
     return VoiceInterviewTurnPublic(
         id=turn.id,
         turn_index=turn.turn_index,
         question_text=turn.question_text,
-        question_text_en=turn.question_text_en,
+        question_text_en=turn.question_text_en or meta.get("question_en"),
+        question_text_sw=meta.get("question_sw"),
         has_question_audio=bool(turn.question_audio_path),
         answered=turn.answered_at is not None,
         transcript=turn.transcript if turn.answered_at else None,
@@ -94,6 +101,7 @@ def start_voice_interview(
             candidate=current_user,
             skill_id=payload.skill_id,
             cv_id=payload.cv_id,
+            language=payload.language,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -203,6 +211,20 @@ async def submit_voice_answer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    if updated.status == VoiceInterviewStatus.completed:
+        try:
+            from backend.services.notification_service import notify_voice_interview_completed
+
+            notify_voice_interview_completed(
+                db,
+                current_user,
+                percentage=updated.percentage,
+                interview_id=updated.id,
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger("thibitisha.notifications").exception("Voice interview SMS notify failed")
     return _summary(updated)
 
 

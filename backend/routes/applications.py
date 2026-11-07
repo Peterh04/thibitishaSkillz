@@ -90,7 +90,25 @@ def apply_to_job(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already applied for this job")
-    return _detail(db, _load_application(db, application.id), include_email=False)
+    loaded = _load_application(db, application.id)
+    try:
+        from backend.services.notification_service import notify_application_submitted
+
+        employer = (
+            db.query(User).filter(User.id == job.employer_id).first() if job.employer_id else None
+        )
+        notify_application_submitted(
+            db,
+            candidate=current_user,
+            employer=employer,
+            job=job,
+            application=loaded or application,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger("thibitisha.notifications").exception("Application submit SMS notify failed")
+    return _detail(db, loaded, include_email=False)
 
 
 @router.get("/applications/my-applications", response_model=ApplicationListResponse)
@@ -171,6 +189,23 @@ def update_application_status(
     db.commit()
     db.refresh(application)
     application = _load_application(db, application.id)
+    try:
+        from backend.services.notification_service import notify_application_status_changed
+
+        employer = application.job.employer if application and application.job else None
+        if employer is None and application and application.job:
+            employer = db.query(User).filter(User.id == application.job.employer_id).first()
+        notify_application_status_changed(
+            db,
+            candidate=application.candidate,
+            employer=employer,
+            job=application.job,
+            application=application,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger("thibitisha.notifications").exception("Application status SMS notify failed")
     return _detail(db, application, include_email=True)
 
 

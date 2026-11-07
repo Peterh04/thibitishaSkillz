@@ -101,6 +101,13 @@ class VoiceInterviewStatus(str, enum.Enum):
     failed = "failed"
 
 
+class SmsDeliveryStatus(str, enum.Enum):
+    pending = "pending"
+    sent = "sent"
+    skipped = "skipped"
+    failed = "failed"
+
+
 def _enum(enum_class):
     return Enum(enum_class, native_enum=False, length=32, values_callable=lambda items: [item.value for item in items])
 
@@ -453,3 +460,23 @@ class VoiceInterviewTurn(Base):
     answered_at = Column(DateTime, nullable=True)
 
     interview = relationship("VoiceInterview", back_populates="turns")
+
+
+class SmsNotificationLog(Base):
+    """Audit trail for ThriveVas SMS — no secrets; body preview only."""
+
+    __tablename__ = "sms_notification_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_key = Column(String(80), nullable=False, index=True)
+    recipient_role = Column(String(32), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    to_msisdn = Column(String(20), nullable=True)
+    body_preview = Column(String(160), nullable=True)
+    related_type = Column(String(40), nullable=True)
+    related_id = Column(Integer, nullable=True)
+    provider = Column(String(40), nullable=False, default="thrivevas")
+    provider_message_id = Column(String(120), nullable=True)
+    status = Column(_enum(SmsDeliveryStatus), default=SmsDeliveryStatus.pending, nullable=False, index=True)
+    error_detail = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

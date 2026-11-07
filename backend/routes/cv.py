@@ -158,11 +158,21 @@ def analyze_cv(
 ):
     cv = _own_cv(db, cv_id, current_user)
     try:
-        apply_analysis(db, cv, current_user)
+        result = apply_analysis(db, cv, current_user)
     except GeminiError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    try:
+        from backend.services.notification_service import notify_cv_analyzed
+
+        skills = result.get("skills") if isinstance(result, dict) else None
+        skill_count = len(skills) if isinstance(skills, list) else 0
+        notify_cv_analyzed(db, current_user, skill_count=skill_count)
+    except Exception:
+        import logging
+
+        logging.getLogger("thibitisha.notifications").exception("CV analyze SMS notify failed")
     db.refresh(cv)
     return _analysis_out(cv)
 

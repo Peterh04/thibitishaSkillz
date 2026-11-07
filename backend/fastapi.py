@@ -121,6 +121,7 @@ def health_check():
         "database": "ok" if db_ok else "unreachable",
         "gemini_configured": settings.gemini_configured,
         "msingi_configured": settings.msingi_configured,
+        "sms_configured": settings.sms_configured,
         "timestamp": utcnow().isoformat(),
     }
 

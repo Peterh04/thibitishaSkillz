@@ -31,6 +31,16 @@ logger = logging.getLogger("thibitisha.voice_interview")
 
 MARKS_PER_TURN = 3
 ALLOWED_ANSWER_EXTENSIONS = {".wav", ".webm", ".ogg", ".mp3", ".m4a"}
+SUPPORTED_LANGUAGES = frozenset({"sw", "en"})
+
+
+def normalize_interview_language(language: str | None) -> str:
+    lang = (language or "sw").strip().lower()
+    if lang in {"sw", "swahili", "kiswahili"}:
+        return "sw"
+    if lang in {"en", "eng", "english"}:
+        return "en"
+    raise ValueError("language must be 'sw' (Kiswahili) or 'en' (English).")
 
 
 def ensure_voice_dir() -> Path:
@@ -73,9 +83,12 @@ def start_interview(
     candidate: User,
     skill_id: int | None = None,
     cv_id: int | None = None,
+    language: str | None = "sw",
 ) -> VoiceInterview:
     if not settings.gemini_configured:
         raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY in backend/.env.")
+
+    lang = normalize_interview_language(language)
 
     existing = (
         db.query(VoiceInterview)
@@ -106,6 +119,7 @@ def start_interview(
             skill_name=skill_name,
             cv_excerpt=_cv_excerpt(cv),
             count=count,
+            language=lang,
         )
     except GeminiError as exc:
         raise RuntimeError(str(exc)) from exc
@@ -114,7 +128,7 @@ def start_interview(
         candidate_id=candidate.id,
         skill_id=skill.id if skill else None,
         cv_id=cv.id,
-        language="sw",
+        language=lang,
         status=VoiceInterviewStatus.in_progress,
         total_questions=len(questions),
         started_at=utcnow(),
@@ -123,16 +137,22 @@ def start_interview(
     db.flush()
 
     for index, item in enumerate(questions):
+        spoken = item["question_en"] if lang == "en" else item["question_sw"]
         db.add(
             VoiceInterviewTurn(
                 interview_id=interview.id,
                 turn_index=index,
-                question_text=item["question_sw"],
+                question_text=spoken,
                 question_text_en=item.get("question_en"),
                 max_marks=MARKS_PER_TURN,
-                # stash expected answer in feedback until answered (cleared on score)
+                # stash bilingual expected answers until scored
                 feedback=json.dumps(
-                    {"expected_answer_sw": item.get("expected_answer_sw", "")},
+                    {
+                        "question_sw": item.get("question_sw", ""),
+                        "question_en": item.get("question_en", ""),
+                        "expected_answer_sw": item.get("expected_answer_sw", ""),
+                        "expected_answer_en": item.get("expected_answer_en", ""),
+                    },
                     ensure_ascii=False,
                 ),
             )
@@ -166,15 +186,22 @@ def current_turn(interview: VoiceInterview) -> VoiceInterviewTurn | None:
     return None
 
 
-def _expected_from_feedback(turn: VoiceInterviewTurn) -> str:
+def _meta_from_feedback(turn: VoiceInterviewTurn) -> dict:
     raw = turn.feedback or ""
     try:
         data = json.loads(raw)
-        if isinstance(data, dict) and "expected_answer_sw" in data:
-            return str(data["expected_answer_sw"])
+        if isinstance(data, dict):
+            return data
     except Exception:
         pass
-    return ""
+    return {}
+
+
+def _expected_from_feedback(turn: VoiceInterviewTurn, language: str) -> str:
+    data = _meta_from_feedback(turn)
+    if language == "en":
+        return str(data.get("expected_answer_en") or data.get("expected_answer_sw") or "")
+    return str(data.get("expected_answer_sw") or data.get("expected_answer_en") or "")
 
 
 def synthesize_question_audio(db: Session, interview: VoiceInterview, turn: VoiceInterviewTurn) -> Path:
@@ -186,8 +213,9 @@ def synthesize_question_audio(db: Session, interview: VoiceInterview, turn: Voic
         if existing.is_file():
             return existing
 
+    lang = normalize_interview_language(interview.language)
     try:
-        audio = create_speech(turn.question_text)
+        audio = create_speech(turn.question_text, language=lang)
     except MsingiError as exc:
         raise RuntimeError(str(exc)) from exc
 
@@ -241,13 +269,16 @@ def submit_answer_audio(
 
     transcript = str(transcription.get("text") or "").strip()
     turn.transcript = transcript
-    expected = _expected_from_feedback(turn)
+    lang = normalize_interview_language(interview.language)
+    meta = _meta_from_feedback(turn)
+    expected = _expected_from_feedback(turn, lang)
 
     try:
         evaluation = evaluate_voice_answer(
-            question_sw=turn.question_text,
-            expected_answer_sw=expected,
+            question_text=turn.question_text,
+            expected_answer=expected,
             transcript=transcript or "(empty)",
+            language=lang,
             max_marks=turn.max_marks or MARKS_PER_TURN,
         )
     except GeminiError as exc:
@@ -258,7 +289,10 @@ def submit_answer_audio(
         {
             "feedback_sw": evaluation.get("feedback_sw", ""),
             "feedback_en": evaluation.get("feedback_en", ""),
-            "expected_answer_sw": expected,
+            "question_sw": meta.get("question_sw", ""),
+            "question_en": meta.get("question_en") or turn.question_text_en or "",
+            "expected_answer_sw": meta.get("expected_answer_sw", ""),
+            "expected_answer_en": meta.get("expected_answer_en", ""),
         },
         ensure_ascii=False,
     )

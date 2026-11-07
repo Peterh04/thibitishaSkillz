@@ -511,6 +511,20 @@ class AdminSummary(BaseModel):
 class StartVoiceInterviewRequest(BaseModel):
     skill_id: Optional[int] = None
     cv_id: Optional[int] = None
+    language: str = Field(
+        default="sw",
+        description="Interview spoken language: 'sw' (Kiswahili) or 'en' (English).",
+    )
+
+    @field_validator("language")
+    @classmethod
+    def language_must_be_supported(cls, value: str) -> str:
+        cleaned = (value or "sw").strip().lower()
+        if cleaned in {"sw", "swahili", "kiswahili"}:
+            return "sw"
+        if cleaned in {"en", "eng", "english"}:
+            return "en"
+        raise ValueError("language must be 'sw' (Kiswahili) or 'en' (English)")
 
 
 class VoiceInterviewTurnPublic(BaseModel):
@@ -518,6 +532,7 @@ class VoiceInterviewTurnPublic(BaseModel):
     turn_index: int
     question_text: str
     question_text_en: Optional[str] = None
+    question_text_sw: Optional[str] = None
     has_question_audio: bool = False
     answered: bool = False
     transcript: Optional[str] = None

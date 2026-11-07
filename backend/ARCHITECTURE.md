@@ -39,6 +39,8 @@ flowchart TB
     SMatch[matching_service]
     SGemini[gemini_service]
     SMsingi[msingi_service]
+    SSms[sms_service]
+    SNotify[notification_service]
   end
 
   subgraph Persistence
@@ -48,6 +50,7 @@ flowchart TB
 
   AI[Google Gemini API]
   MSINGI[MsingiAI api.msingiai.com]
+  THRIVE[ThriveVas SMS]
 
   FE --> CORS
   DOCS --> CORS
@@ -67,6 +70,9 @@ flowchart TB
   SMatch --> DB
   SGemini --> AI
   SMsingi --> MSINGI
+  SNotify --> SSms
+  SSms --> THRIVE
+  Routes --> SNotify
   Routes --> DB
 ```
 
@@ -111,7 +117,7 @@ sequenceDiagram
   API->>DB: CandidateSkill (unverified) + profile fields
 
   S->>API: POST /api/voice-interviews/start
-  API->>G: generate_voice_interview_questions (Kiswahili)
+  API->>G: generate_voice_interview_questions (sw or en)
   API->>DB: VoiceInterview + turns (in_progress)
 
   S->>API: GET .../turns/{i}/audio
@@ -260,6 +266,7 @@ erDiagram
 - **AuthZ:** JWT → revocation check → active user → role → ownership  
 - **Uploads:** PDF + DOCX; magic-byte detection; size cap; stored under `uploads/cvs`; voice under `uploads/voice`  
 - **MsingiAI:** server-side `MSINGI_API_KEY` only; TTS/STT via `https://api.msingiai.com` ([docs](https://platform.msingiai.com/docs)); billable on audio endpoints  
+- **SMS (ThriveVas):** disabled by default (`THRIVE_SMS_ENABLED=false`); stage alerts to candidate/employer phones; failures never block the API; audit rows in `sms_notification_logs`  
 - **AI safety:** untrusted CV/answers fenced; JSON schema-validated  
 - **Health:** `GET /health` reports DB reachability and whether Gemini is configured  
 
