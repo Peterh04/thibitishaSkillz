@@ -7,7 +7,10 @@ import RecruiterDashboard from "./pages/RecruiterDashboard";
 import { Route, Routes } from "react-router-dom";
 import RecruiterHome from "./pages/RecruiterHome";
 import RecruiterJobs from "./pages/RecruiterJobs";
-RecruiterHome;
+import SignInPage from "./pages/SignInPage";
+import CandidateProfile from "./pages/CandidateProfile";
+import InterviewSubmitted from "./pages/InterviewSubmitted";
+import InterviewResults from "./pages/InterviewResults";
 
 function App() {
   return (
@@ -20,6 +23,10 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/recruiter" element={<RecruiterHome />} />
         <Route path="/recruiter/jobs" element={<RecruiterJobs />} />
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/profile" element={<CandidateProfile />} />
+        <Route path="/interview/submit" element={<InterviewSubmitted />} />
+        <Route path="/interview/results" element={<InterviewResults />} />
       </Routes>
     </>
   );
