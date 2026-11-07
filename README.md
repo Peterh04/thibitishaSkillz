@@ -5,11 +5,13 @@ Thibitisha Skills is a skill verification and skills-first recruitment platform 
 ## Repository Layout
 
 - `backend/`: FastAPI backend service, database models, Gemini AI services, REST APIs, and automated test suite.
+- `backend/ARCHITECTURE.md`: Backend flow architecture (system layers, seeker/employer sequences, data model).
 - `frontend/`: User interface (React/Vite).
 
 ## Backend Quickstart
 
-For full backend documentation, configuration, and API reference, see [backend/README.md](backend/README.md).
+For full backend documentation, configuration, and API reference, see [backend/README.md](backend/README.md).  
+For flows and diagrams, see [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md).
 
 ```bash
 # 1. Setup virtual environment

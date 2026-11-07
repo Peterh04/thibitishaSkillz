@@ -1,10 +1,18 @@
-"""CV file handling and Gemini analysis."""
+"""CV file handling and Gemini analysis.
+
+Supported uploads: PDF and Word (.docx). Legacy .doc is rejected with a clear
+conversion message — text extraction from binary OLE Word is unreliable.
+"""
+
+from __future__ import annotations
 
 import re
+import zipfile
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+from docx import Document
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
@@ -25,18 +33,58 @@ from backend.utils import clean_text, skill_name_key, skill_supported_by_text, u
 
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._ -]")
 
+SUPPORTED_CV_TYPES = frozenset({"pdf", "docx"})
+OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
-def display_file_name(original_name: str | None) -> str:
-    base = Path(original_name or "cv.pdf").name
-    cleaned = SAFE_NAME.sub("", base).strip() or "cv.pdf"
-    if not cleaned.lower().endswith(".pdf"):
-        cleaned = f"{cleaned}.pdf"
+
+def detect_cv_type(content: bytes, original_name: str | None = None) -> str:
+    """Detect CV format from magic bytes (filename is a secondary hint only)."""
+    if not content:
+        raise ValueError("The uploaded file is empty.")
+
+    if content.startswith(b"%PDF"):
+        return "pdf"
+
+    if content.startswith(OLE_MAGIC):
+        raise ValueError(
+            "Legacy Word (.doc) files are not supported. "
+            "Please save the CV as .docx or PDF and upload again."
+        )
+
+    # DOCX is a ZIP package containing word/document.xml
+    if content[:2] == b"PK":
+        try:
+            with zipfile.ZipFile(BytesIO(content)) as archive:
+                names = {name.replace("\\", "/") for name in archive.namelist()}
+        except zipfile.BadZipFile as exc:
+            raise ValueError("The Word document could not be read. Please upload a valid .docx file.") from exc
+        if "word/document.xml" in names:
+            return "docx"
+        raise ValueError(
+            "This ZIP file is not a Word document. Upload a PDF or .docx CV."
+        )
+
+    suffix = Path(original_name or "").suffix.lower()
+    if suffix == ".pdf":
+        raise ValueError("The file extension is .pdf but the contents are not a valid PDF.")
+    if suffix in {".docx", ".doc"}:
+        raise ValueError("The file extension looks like Word, but the contents are not a valid .docx.")
+
+    raise ValueError("Only PDF and Word (.docx) CVs are supported.")
+
+
+def display_file_name(original_name: str | None, file_type: str) -> str:
+    base = Path(original_name or f"cv.{file_type}").name
+    cleaned = SAFE_NAME.sub("", base).strip() or f"cv.{file_type}"
+    expected = f".{file_type}"
+    if not cleaned.lower().endswith(expected):
+        cleaned = f"{Path(cleaned).stem}{expected}"
     return cleaned[:120]
 
 
 def extract_pdf_text(content: bytes) -> str:
     if not content.startswith(b"%PDF"):
-        raise ValueError("Only PDF files are supported.")
+        raise ValueError("Only PDF files are supported for this extractor.")
     try:
         reader = PdfReader(BytesIO(content))
         pages = [(page.extract_text() or "") for page in reader.pages]
@@ -48,12 +96,60 @@ def extract_pdf_text(content: bytes) -> str:
     return text
 
 
-def save_cv_file(candidate_id: int, content: bytes, original_name: str | None) -> tuple[str, str]:
+def extract_docx_text(content: bytes) -> str:
+    try:
+        document = Document(BytesIO(content))
+    except Exception as exc:
+        raise ValueError("The Word document could not be read. Please upload a valid .docx file.") from exc
+
+    chunks: list[str] = []
+    for paragraph in document.paragraphs:
+        piece = (paragraph.text or "").strip()
+        if piece:
+            chunks.append(piece)
+
+    for table in document.tables:
+        for row in table.rows:
+            cells = []
+            for cell in row.cells:
+                cell_text = clean_text(cell.text or "", limit=2000)
+                if cell_text:
+                    cells.append(cell_text)
+            if cells:
+                chunks.append(" | ".join(cells))
+
+    text = clean_text("\n".join(chunks), limit=200000)
+    if not text:
+        raise ValueError(
+            "This Word document has no readable text. "
+            "Empty or image-only CVs are not supported yet."
+        )
+    return text
+
+
+def extract_cv_text(content: bytes, original_name: str | None = None) -> tuple[str, str]:
+    """Return (extracted_text, file_type) for a supported CV upload."""
+    file_type = detect_cv_type(content, original_name)
+    if file_type == "pdf":
+        return extract_pdf_text(content), file_type
+    if file_type == "docx":
+        return extract_docx_text(content), file_type
+    raise ValueError("Only PDF and Word (.docx) CVs are supported.")
+
+
+def save_cv_file(
+    candidate_id: int,
+    content: bytes,
+    original_name: str | None,
+    file_type: str,
+) -> tuple[str, str]:
+    if file_type not in SUPPORTED_CV_TYPES:
+        raise ValueError("Only PDF and Word (.docx) CVs are supported.")
     settings.upload_path.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{candidate_id}_{uuid4().hex}.pdf"
+    stored_name = f"{candidate_id}_{uuid4().hex}.{file_type}"
     path = settings.upload_path / stored_name
     path.write_bytes(content)
-    return display_file_name(original_name), str(path)
+    return display_file_name(original_name, file_type), str(path)
 
 
 def delete_cv_file(file_path: str) -> None:

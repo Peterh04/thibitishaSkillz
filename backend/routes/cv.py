@@ -7,7 +7,7 @@ from backend.config import settings
 from backend.dependencies import get_db, require_roles
 from backend.models import AnalysisStatus, CV, User, UserRole
 from backend.schema import CVAnalysisOut, CVOut, MessageResponse
-from backend.services.cv_service import apply_analysis, delete_cv_file, extract_pdf_text, save_cv_file
+from backend.services.cv_service import apply_analysis, delete_cv_file, extract_cv_text, save_cv_file
 from backend.services.gemini_service import GeminiError
 from backend.utils import utcnow
 
@@ -68,8 +68,8 @@ async def upload_cv(
             detail=f"CV files must be {settings.MAX_CV_SIZE_MB} MB or smaller",
         )
     try:
-        text = extract_pdf_text(content)
-        file_name, file_path = save_cv_file(current_user.id, content, file.filename)
+        text, file_type = extract_cv_text(content, file.filename)
+        file_name, file_path = save_cv_file(current_user.id, content, file.filename, file_type)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -80,7 +80,7 @@ async def upload_cv(
         candidate_id=current_user.id,
         file_name=file_name,
         file_path=file_path,
-        file_type="pdf",
+        file_type=file_type,
         extracted_text=text,
         analysis_status=AnalysisStatus.pending,
         is_current=True,

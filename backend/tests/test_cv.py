@@ -1,6 +1,8 @@
 """Tests for CV upload, retrieval, deletion, and Gemini analysis."""
 
+from io import BytesIO
 from unittest.mock import patch
+
 import pytest
 from fastapi import status
 
@@ -10,16 +12,44 @@ def fake_pdf_bytes():
     return b"%PDF-1.4 Fake PDF Header with text stream %EOF"
 
 
-def test_cv_upload_non_pdf_fails(client, job_seeker_headers):
+@pytest.fixture
+def fake_docx_bytes():
+    """Real .docx bytes generated with python-docx."""
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("Experienced Python and React developer")
+    document.add_paragraph("Skills: FastAPI, SQL")
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_cv_upload_unsupported_type_fails(client, job_seeker_headers):
     files = {"file": ("resume.txt", b"Plain text file content", "text/plain")}
     response = client.post("/api/cv/upload", headers=job_seeker_headers, files=files)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "pdf" in response.json()["detail"].lower()
+    detail = response.json()["detail"].lower()
+    assert "pdf" in detail and "docx" in detail
 
 
-def test_cv_upload_and_retrieve(client, job_seeker_headers, fake_pdf_bytes):
-    with patch("backend.routes.cv.extract_pdf_text", return_value="Experienced Python and React developer"):
-        with patch("backend.routes.cv.save_cv_file", return_value=("resume.pdf", "uploads/cvs/test.pdf")):
+def test_cv_upload_legacy_doc_rejected(client, job_seeker_headers):
+    ole_header = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64
+    files = {"file": ("resume.doc", ole_header, "application/msword")}
+    response = client.post("/api/cv/upload", headers=job_seeker_headers, files=files)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "docx" in response.json()["detail"].lower()
+
+
+def test_cv_upload_and_retrieve_pdf(client, job_seeker_headers, fake_pdf_bytes):
+    with patch(
+        "backend.routes.cv.extract_cv_text",
+        return_value=("Experienced Python and React developer", "pdf"),
+    ):
+        with patch(
+            "backend.routes.cv.save_cv_file",
+            return_value=("resume.pdf", "uploads/cvs/test.pdf"),
+        ):
             files = {"file": ("resume.pdf", fake_pdf_bytes, "application/pdf")}
             response = client.post("/api/cv/upload", headers=job_seeker_headers, files=files)
 
@@ -27,24 +57,54 @@ def test_cv_upload_and_retrieve(client, job_seeker_headers, fake_pdf_bytes):
     cv_data = response.json()
     cv_id = cv_data["id"]
     assert cv_data["file_name"] == "resume.pdf"
+    assert cv_data["file_type"] == "pdf"
     assert cv_data["is_current"] is True
 
-    # Retrieve current CV
     get_res = client.get("/api/cv/my-cv", headers=job_seeker_headers)
     assert get_res.status_code == status.HTTP_200_OK
     assert get_res.json()["id"] == cv_id
 
-    # Retrieve CV history
     hist_res = client.get("/api/cv/my-cv/history", headers=job_seeker_headers)
     assert hist_res.status_code == status.HTTP_200_OK
     assert len(hist_res.json()) >= 1
+
+
+def test_cv_upload_docx(client, job_seeker_headers, fake_docx_bytes):
+    with patch(
+        "backend.routes.cv.extract_cv_text",
+        return_value=("Experienced Python and React developer", "docx"),
+    ):
+        with patch(
+            "backend.routes.cv.save_cv_file",
+            return_value=("resume.docx", "uploads/cvs/test.docx"),
+        ):
+            files = {
+                "file": (
+                    "resume.docx",
+                    fake_docx_bytes,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            }
+            response = client.post("/api/cv/upload", headers=job_seeker_headers, files=files)
+
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["file_type"] == "docx"
+    assert data["file_name"].endswith(".docx")
+
+
+def test_extract_docx_text_reads_paragraphs(fake_docx_bytes):
+    from backend.services.cv_service import extract_cv_text
+
+    text, file_type = extract_cv_text(fake_docx_bytes, "resume.docx")
+    assert file_type == "docx"
+    assert "Python" in text
 
 
 def test_cv_analyze_with_gemini(client, job_seeker_headers, fake_pdf_bytes, db_session, job_seeker_user):
     from backend.models import CV, AnalysisStatus
     from backend.utils import utcnow
 
-    # Insert a CV record directly
     cv = CV(
         candidate_id=job_seeker_user.id,
         file_name="resume.pdf",
@@ -82,7 +142,6 @@ def test_cv_analyze_with_gemini(client, job_seeker_headers, fake_pdf_bytes, db_s
     assert len(data["skills"]) >= 2
     assert data["education"] == "University of Nairobi BSc CS"
 
-    # Verify analysis is retrievable
     get_res = client.get(f"/api/cv/{cv.id}/analysis", headers=job_seeker_headers)
     assert get_res.status_code == status.HTTP_200_OK
     assert get_res.json()["analysis_status"] == "completed"
@@ -111,4 +170,3 @@ def test_cv_delete(client, job_seeker_headers, fake_pdf_bytes, db_session, job_s
 
     assert del_res.status_code == status.HTTP_200_OK
     assert "deleted" in del_res.json()["message"].lower()
-

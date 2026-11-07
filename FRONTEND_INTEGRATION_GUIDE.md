@@ -57,7 +57,7 @@ Validation errors (`422 Unprocessable Entity`) contain Pydantic's structured val
 | `GET` | `/api/employers/profile` | Employers | Get current employer company profile | Yes | `employer`, `admin` | None | None | None | `EmployerProfileOut` | 200, 401, 403 |
 | `PUT` | `/api/employers/profile` | Employers | Update employer company profile | Yes | `employer`, `admin` | JSON | None | `company_name`, `company_description`, `company_website`, `company_location`, `industry`, `company_logo` | `EmployerProfileOut` | 200, 401, 403, 422 |
 | `GET` | `/api/employers/my-jobs` | Employers | List all jobs created by current employer | Yes | `employer`, `admin` | Query params | None | `page`, `page_size`, `status` | `JobListResponse` (`items`, `total`, `page`, `page_size`) | 200, 401, 403 |
-| `POST` | `/api/cv/upload` | CV | Upload candidate PDF CV | Yes | `job_seeker` | multipart/form-data | `file` (PDF file) | None | `CVOut` (`id`, `candidate_id`, `file_name`, `file_type`, `analysis_status`, `is_current`, `uploaded_at`) | 201, 400, 401, 403, 413 |
+| `POST` | `/api/cv/upload` | CV | Upload candidate PDF or Word (`.docx`) CV | Yes | `job_seeker` | multipart/form-data | `file` (PDF or DOCX) | None | `CVOut` (`id`, `candidate_id`, `file_name`, `file_type`=`pdf`\|`docx`, `analysis_status`, `is_current`, `uploaded_at`) | 201, 400, 401, 403, 413 |
 | `GET` | `/api/cv/my-cv` | CV | Get currently active uploaded CV | Yes | `job_seeker` | None | None | None | `CVOut` | 200, 401, 403, 404 |
 | `GET` | `/api/cv/my-cv/history` | CV | List all uploaded CVs for candidate | Yes | `job_seeker` | None | None | None | `list[CVOut]` | 200, 401, 403 |
 | `DELETE` | `/api/cv/{cv_id}` | CV | Delete an uploaded CV | Yes | `job_seeker`, `admin` | Path param | `cv_id` | None | `MessageResponse` | 200, 401, 403, 404 |
@@ -246,9 +246,9 @@ Updates candidate-specific details and privacy settings. Setting `is_public: tru
 ### 3.3 CV Upload & AI Analysis Flow
 
 #### Step 1: Upload CV (`POST /api/cv/upload`)
-Uploads a candidate PDF CV file (maximum 5MB).
+Uploads a candidate PDF or Word (`.docx`) CV file (maximum 5MB). Legacy `.doc` is rejected — save as `.docx` or PDF.
 - **Headers:** `Content-Type: multipart/form-data`
-- **Body:** `file` form-data field containing `.pdf` file.
+- **Body:** `file` form-data field containing `.pdf` or `.docx` file.
 
 **Response (201 Created):**
 ```json

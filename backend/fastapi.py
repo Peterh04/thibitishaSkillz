@@ -23,14 +23,16 @@ from backend.routes.jobs import router as jobs_router
 from backend.routes.leaderboard import router as leaderboard_router
 from backend.routes.skills import router as skills_router
 from backend.routes.users import router as users_router
+from backend.routes.voice_interviews import router as voice_interviews_router
 from backend.seed import seed_admin, seed_skills
 from backend.utils import utcnow
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure upload directory exists
+    # Ensure upload directories exist
     settings.upload_path.mkdir(parents=True, exist_ok=True)
+    settings.voice_upload_path.mkdir(parents=True, exist_ok=True)
 
     # Initialize tables and seed initial data
     try:
@@ -88,6 +90,7 @@ app.include_router(assessments_router)
 app.include_router(leaderboard_router)
 app.include_router(jobs_router)
 app.include_router(applications_router)
+app.include_router(voice_interviews_router)
 
 
 @app.get("/", tags=["Health"])
@@ -117,6 +120,7 @@ def health_check():
         "status": "healthy" if db_ok else "degraded",
         "database": "ok" if db_ok else "unreachable",
         "gemini_configured": settings.gemini_configured,
+        "msingi_configured": settings.msingi_configured,
         "timestamp": utcnow().isoformat(),
     }
 

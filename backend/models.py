@@ -94,6 +94,13 @@ class ApplicationStatus(str, enum.Enum):
     accepted = "accepted"
 
 
+class VoiceInterviewStatus(str, enum.Enum):
+    pending = "pending"
+    in_progress = "in_progress"
+    completed = "completed"
+    failed = "failed"
+
+
 def _enum(enum_class):
     return Enum(enum_class, native_enum=False, length=32, values_callable=lambda items: [item.value for item in items])
 
@@ -135,6 +142,9 @@ class User(Base):
         "CandidateRanking", back_populates="candidate", cascade="all, delete-orphan"
     )
     jobs = relationship("Job", back_populates="employer", cascade="all, delete-orphan")
+    voice_interviews = relationship(
+        "VoiceInterview", back_populates="candidate", cascade="all, delete-orphan"
+    )
 
 
 class CandidateProfile(Base):
@@ -394,3 +404,52 @@ class RevokedToken(Base):
     jti = Column(String(64), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)
+
+
+class VoiceInterview(Base):
+    """Spoken interview after CV upload — questions via Gemini, audio via MsingiAI."""
+
+    __tablename__ = "voice_interviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(Integer, ForeignKey("skills.id", ondelete="SET NULL"), nullable=True, index=True)
+    cv_id = Column(Integer, ForeignKey("cvs.id", ondelete="SET NULL"), nullable=True, index=True)
+    language = Column(String(16), nullable=False, default="sw")
+    status = Column(_enum(VoiceInterviewStatus), default=VoiceInterviewStatus.pending, nullable=False, index=True)
+    total_questions = Column(Integer, default=0, nullable=False)
+    score = Column(Float, nullable=True)
+    percentage = Column(Float, nullable=True)
+    summary = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    candidate = relationship("User", back_populates="voice_interviews")
+    skill = relationship("Skill")
+    cv = relationship("CV")
+    turns = relationship(
+        "VoiceInterviewTurn", back_populates="interview", cascade="all, delete-orphan"
+    )
+
+
+class VoiceInterviewTurn(Base):
+    __tablename__ = "voice_interview_turns"
+    __table_args__ = (UniqueConstraint("interview_id", "turn_index", name="uq_voice_interview_turn"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    interview_id = Column(
+        Integer, ForeignKey("voice_interviews.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    turn_index = Column(Integer, nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_text_en = Column(Text, nullable=True)
+    question_audio_path = Column(String(500), nullable=True)
+    answer_audio_path = Column(String(500), nullable=True)
+    transcript = Column(Text, nullable=True)
+    awarded_marks = Column(Integer, nullable=True)
+    max_marks = Column(Integer, nullable=False, default=3)
+    feedback = Column(Text, nullable=True)
+    answered_at = Column(DateTime, nullable=True)
+
+    interview = relationship("VoiceInterview", back_populates="turns")

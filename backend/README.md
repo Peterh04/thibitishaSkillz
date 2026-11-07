@@ -2,6 +2,8 @@
 
 **Thibitisha Skills** is a skill verification and skills-first recruitment platform. The platform helps job seekers verify the skills they claim to possess through objective and AI-evaluated assessments, and helps employers discover, match, and recruit candidates based on verified competencies rather than relying solely on CV claims.
 
+**Architecture & flows:** see [ARCHITECTURE.md](./ARCHITECTURE.md) for system layers, seeker/employer sequences, matching, and the data model (Mermaid diagrams).
+
 ---
 
 ## Technology Stack
@@ -11,7 +13,7 @@
 - **Database ORM:** SQLAlchemy 2.0
 - **Database:** MySQL 8.0+ (SQLite supported for development / unit testing)
 - **Data Validation & Settings:** Pydantic v2 & Pydantic-Settings
-- **AI Integration:** Google Gemini API (`google-genai` SDK)
+- **AI Integration:** Google Gemini API (`google-genai` SDK); MsingiAI speech (`api.msingiai.com`) for voice interviews
 - **Authentication:** JWT (JSON Web Tokens) with `python-jose`
 - **Password Hashing:** Passlib (`bcrypt`)
 - **Database Migrations:** Alembic
@@ -40,13 +42,16 @@ backend/
 │   ├── cv.py                  # CV upload, extraction, Gemini analysis, and history
 │   ├── skills.py              # Skill catalog and candidate-claimed skills
 │   ├── assessments.py         # Assessments start, questions, submission marking, verified results
+│   ├── voice_interviews.py    # Post-CV Kiswahili voice interviewer (Gemini + MsingiAI)
 │   ├── leaderboard.py         # Verified skill leaderboard and rankings
 │   ├── jobs.py                # Job listings, required skills, candidate matching algorithm
 │   └── applications.py        # Job applications, match score, status updates
 │
 ├── services/
 │   ├── gemini_service.py      # Google Gemini API integration (CV analysis, question gen, answer eval)
-│   ├── cv_service.py          # PDF text extraction and CV analysis orchestration
+│   ├── msingi_service.py      # MsingiAI TTS/STT client (server-side API key only)
+│   ├── voice_interview_service.py  # Spoken interview orchestration
+│   ├── cv_service.py          # PDF/DOCX text extraction and CV analysis orchestration
 │   ├── assessment_service.py  # Assessment scoring, verification levels, and leaderboard ranking
 │   └── matching_service.py    # Weighted matching of verified candidate skills to job requirements
 │
@@ -62,11 +67,13 @@ backend/
 │   ├── test_skills.py         # Skill catalog and candidate skill tests
 │   ├── test_cv.py             # CV upload and Gemini analysis tests
 │   ├── test_assessments.py    # Assessment generation, marking, and verification tests
+│   ├── test_voice_interviews.py # Voice interview flow with mocked Gemini/Msingi
 │   ├── test_jobs_matching_applications.py # Jobs, matching algorithm, applications tests
 │   └── test_leaderboard.py    # Verified leaderboard rankings tests
 │
 ├── uploads/
-│   └── cvs/                   # Uploaded candidate CV files
+│   ├── cvs/                   # Uploaded candidate CV files
+│   └── voice/                 # Cached question WAV + answer audio
 │
 ├── alembic.ini                # Alembic migration configuration
 ├── requirements.txt           # Project dependencies
@@ -186,7 +193,7 @@ FastAPI automatically generates interactive Swagger and ReDoc documentation:
 - **Admin:** Manages user accounts, activates/deactivates accounts, manages the skill catalog, and views platform-wide metrics.
 
 ### 2. Gemini AI Integration
-- **CV Analysis:** Extracts text from uploaded PDF CVs and uses Google Gemini to identify skills, education, experience, certifications, and projects. Extracted skills require candidate confirmation or verification before being verified.
+- **CV Analysis:** Extracts text from uploaded PDF or Word (`.docx`) CVs and uses Google Gemini to identify skills, education, experience, certifications, and projects. Legacy `.doc` is not supported (save as `.docx` or PDF). Extracted skills require candidate confirmation or verification before being verified.
 - **Question Generation:** Dynamically generates assessment questions tailored to the skill, difficulty level (beginner, intermediate, advanced), and includes both multiple-choice and practical/text questions.
 - **Answer Evaluation:** Multiple-choice questions are marked automatically by the backend. Text and practical questions are evaluated against model criteria using Gemini with strict score boundaries and constructive feedback.
 - **Prompt Injection Defense:** All candidate inputs and CV texts are safely fenced as untrusted data with strict system instructions preventing role hijacking or instruction overriding.

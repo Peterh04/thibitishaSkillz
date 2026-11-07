@@ -17,6 +17,7 @@ from backend.models import (
     SkillSource,
     UserRole,
     VerificationResultStatus,
+    VoiceInterviewStatus,
 )
 
 
@@ -505,6 +506,42 @@ class AdminSummary(BaseModel):
     applications: int
     assessments: int
     verified_skills: int
+
+
+class StartVoiceInterviewRequest(BaseModel):
+    skill_id: Optional[int] = None
+    cv_id: Optional[int] = None
+
+
+class VoiceInterviewTurnPublic(BaseModel):
+    id: int
+    turn_index: int
+    question_text: str
+    question_text_en: Optional[str] = None
+    has_question_audio: bool = False
+    answered: bool = False
+    transcript: Optional[str] = None
+    awarded_marks: Optional[int] = None
+    max_marks: int = 3
+    feedback: Optional[str] = None
+    answered_at: Optional[datetime] = None
+
+
+class VoiceInterviewSummary(BaseModel):
+    id: int
+    skill_id: Optional[int] = None
+    skill_name: Optional[str] = None
+    cv_id: Optional[int] = None
+    language: str
+    status: VoiceInterviewStatus
+    total_questions: int
+    current_turn_index: Optional[int] = None
+    score: Optional[float] = None
+    percentage: Optional[float] = None
+    summary: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    turns: list[VoiceInterviewTurnPublic] = []
 
 
 ProfileResponse.model_rebuild()

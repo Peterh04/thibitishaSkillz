@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
 
+    # MsingiAI voice interviewer (TTS / STT) — server-side only
+    # Docs: https://platform.msingiai.com/docs
+    MSINGI_BASE_URL: str = "https://api.msingiai.com"
+    MSINGI_API_KEY: str = ""
+    MSINGI_DEFAULT_VOICE_ID: str = "female3"
+    VOICE_INTERVIEW_QUESTIONS: int = 5
+    MAX_VOICE_ANSWER_SECONDS: int = 120
+
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
     UPLOAD_DIR: str = ""
     MAX_CV_SIZE_MB: int = 5
@@ -117,6 +125,14 @@ class Settings(BaseSettings):
     @property
     def gemini_configured(self) -> bool:
         return bool(self.GEMINI_API_KEY.strip())
+
+    @property
+    def msingi_configured(self) -> bool:
+        return bool(self.MSINGI_API_KEY.strip())
+
+    @property
+    def voice_upload_path(self) -> Path:
+        return self.upload_path.parent / "voice"
 
 
 settings = Settings()

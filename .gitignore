@@ -42,6 +42,8 @@ backend/.env.*
 # Uploads
 backend/uploads/cvs/*
 !backend/uploads/cvs/.gitkeep
+backend/uploads/voice/*
+!backend/uploads/voice/.gitkeep
 
 # Node / Frontend
 node_modules/
