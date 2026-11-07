@@ -48,7 +48,7 @@ The ultimate goal is to help employers move beyond CV-based recruitment towards 
 
 ## The core problem our product addresses
 
-How might we help employers identify and shortlist genuinely qualified candidates by verifying their actual competencies against job requirements, rather than relying solely on CVs, AI-generated applications and conventional interviews?
+How might we help employers identify and shortlist genuinely qualified candidates by verifying their actual competencies against job requirements, rather than relying solely on CVs, AI-generated applications and conventional interviews?  
 
 ## Key problems being solved
 
@@ -58,3 +58,4 @@ How might we help employers identify and shortlist genuinely qualified candidate
 4.	Inconsistent assessments: Lack of standardised, role-specific evaluation of candidates.
 5.	Poor candidate matching: Difficulty identifying applicants whose demonstrated competencies align with job requirements.
 6.	Communication delays: Inefficient communication of interview invitations and recruitment updates.
+
