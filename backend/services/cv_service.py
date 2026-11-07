@@ -190,7 +190,11 @@ def apply_analysis(db: Session, cv: CV, candidate: User) -> dict:
 
     saved_skills = []
     for item in raw.get("skills", []):
-        name = clean_text(str(item.get("name", "")), limit=80)
+        if isinstance(item, str):
+            name = clean_text(item, limit=80)
+            item = {"name": name, "category": "General", "requires_confirmation": False}
+        else:
+            name = clean_text(str(item.get("name", "")), limit=80)
         if not name or len(name.split()) > 4:
             continue
         if not skill_supported_by_text(name, cv.extracted_text):

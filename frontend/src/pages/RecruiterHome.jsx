@@ -1,205 +1,277 @@
-import { useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
+import { useAuth } from "../context/AuthContext";
+import employersApi from "../api/employers";
+import applicationsApi from "../api/applications";
 import "../styles/recruiter-home.css";
 
-// Replace with data from your API
-const RECRUITER = { name: "Peter" };
+export default function RecruiterHome() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-const JOBS = [
-  {
-    id: 1,
-    title: "Junior Data Analyst",
-    company: "Acme Insurance",
-    status: "Open",
-    applicants: 5,
-    interviewed: 5,
-    shortlisted: 3,
-  },
-  {
-    id: 2,
-    title: "Cloud Support Associate",
-    company: "[COMPANY]",
-    status: "Open",
-    applicants: 0,
-    interviewed: 0,
-    shortlisted: 0,
-  },
-  {
-    id: 3,
-    title: "Mobile Developer Intern",
-    company: "[COMPANY]",
-    status: "Closed",
-    applicants: 0,
-    interviewed: 0,
-    shortlisted: 0,
-  },
-];
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [jobs, setJobs] = useState([]);
+  const [allApplications, setAllApplications] = useState([]);
+  const [error, setError] = useState("");
 
-// Adjust these routes to match your router
-const ROUTES = {
-  jobs: "/recruiter/jobs",
-  newJob: "/recruiter/jobs/new",
-  candidates: "/recruiter/candidates",
-  invites: "/recruiter/invites",
-  job: (id) => `/recruiter/jobs/${id}`,
-};
+  // Profile modal state if company name is missing
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [updatingProfile, setUpdatingProfile] = useState(false);
 
-export default function RecruiterHome({ recruiter = RECRUITER, jobs = JOBS }) {
-  const totals = useMemo(
-    () => ({
-      open: jobs.filter((j) => j.status === "Open").length,
-      applicants: jobs.reduce((n, j) => n + j.applicants, 0),
-      interviewed: jobs.reduce((n, j) => n + j.interviewed, 0),
-      shortlisted: jobs.reduce((n, j) => n + j.shortlisted, 0),
-    }),
-    [jobs],
-  );
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [profData, jobsData] = await Promise.all([
+        employersApi.getProfile().catch(() => null),
+        employersApi.getMyJobs().catch(() => ({ items: [] })),
+      ]);
 
-  const handleSignOut = () => {
-    // TODO: clear session and redirect
-    console.log("sign out");
+      setProfile(profData);
+      if (profData?.company_name) {
+        setCompanyName(profData.company_name);
+        setIndustry(profData.industry || "");
+      }
+
+      const jobList = jobsData.items || [];
+      setJobs(jobList);
+
+      // Load applications for these jobs
+      const appsPromises = jobList.map((j) =>
+        applicationsApi.getJobApplications(j.id).catch(() => ({ items: [] }))
+      );
+      const appsResults = await Promise.all(appsPromises);
+      const flattenedApps = appsResults.flatMap((r) => r.items || []);
+      setAllApplications(flattenedApps);
+    } catch (err) {
+      setError(err.message || "Failed to load employer dashboard.");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!companyName.trim()) return;
+    setUpdatingProfile(true);
+    try {
+      const updated = await employersApi.updateProfile({
+        company_name: companyName.trim(),
+        industry: industry.trim() || undefined,
+      });
+      setProfile(updated);
+    } catch (err) {
+      setError(err.message || "Failed to update company profile.");
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
+
+  const totals = useMemo(() => {
+    const openJobs = jobs.filter((j) => j.status === "published").length;
+    const totalApplicants = allApplications.length;
+    const shortlisted = allApplications.filter(
+      (a) => a.application_status === "shortlisted" || a.application_status === "accepted"
+    ).length;
+    const interviewed = allApplications.filter(
+      (a) => a.application_status === "interviewed" || a.application_status === "shortlisted"
+    ).length;
+
+    return {
+      open: openJobs,
+      applicants: totalApplicants,
+      interviewed,
+      shortlisted,
+    };
+  }, [jobs, allApplications]);
 
   return (
     <div className="ph-home">
-      <header className="ph-home__bar">
-        <a className="ph-home__logo" href="/recruiter">
-          <span className="ph-home__logo-mark" />
-          ProofHire
-        </a>
-        <nav className="ph-home__nav">
-          <a
-            className="ph-home__nav-link ph-home__nav-link--active"
-            href="/recruiter"
-          >
-            Home
-          </a>
-          <a className="ph-home__nav-link" href={ROUTES.jobs}>
-            Jobs
-          </a>
-          <a className="ph-home__nav-link" href={ROUTES.candidates}>
-            Candidates
-          </a>
-          <button
-            className="ph-home__nav-link"
-            type="button"
-            onClick={handleSignOut}
-          >
-            Sign out
-          </button>
-        </nav>
-      </header>
+      <Navbar />
 
       <main className="ph-home__main">
+        {/* Recruiter Header */}
         <div className="ph-home__head">
           <div>
-            <h1 className="ph-home__title">Welcome back, {recruiter.name}</h1>
+            <h1 className="ph-home__title">
+              Welcome back, {user?.full_name || "Recruiter"}
+            </h1>
             <p className="ph-home__sub">
-              Here is where your hiring stands today.
+              {profile?.company_name ? (
+                <span>
+                  Hiring for <strong>{profile.company_name}</strong> {profile.industry ? `(${profile.industry})` : ""}
+                </span>
+              ) : (
+                "Here is where your skill-verified hiring stands today."
+              )}
             </p>
           </div>
-          <a className="ph-btn" href={ROUTES.newJob}>
-            Post a new job
-          </a>
+          <Link className="ph-btn" to="/recruiter/jobs/new">
+            + Post New Job
+          </Link>
         </div>
 
+        {/* Company Profile Setup Warning */}
+        {profile && !profile.company_name && (
+          <div style={{ background: "#fff", border: "1px solid #ffd591", borderRadius: "10px", padding: "20px", marginBottom: "24px" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#d46b08" }}>Set Your Company Name</h3>
+            <p style={{ margin: "0 0 14px", fontSize: "14px", color: "#666" }}>
+              Before publishing job postings, please provide your organization name.
+            </p>
+            <form onSubmit={handleSaveProfile} style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <input
+                type="text"
+                placeholder="Company Name (e.g. Acme Corp)"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                required
+                style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", flex: 1, minWidth: "200px" }}
+              />
+              <input
+                type="text"
+                placeholder="Industry (e.g. Fintech, Health, Edtech)"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", flex: 1, minWidth: "160px" }}
+              />
+              <button
+                type="submit"
+                disabled={updatingProfile}
+                style={{ padding: "8px 16px", background: "#1a5fa6", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "500" }}
+              >
+                {updatingProfile ? "Saving..." : "Save Profile"}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Stats Grid */}
         <div className="ph-home__stats">
           <div className="ph-stat">
             <p className="ph-stat__label">Open jobs</p>
             <p className="ph-stat__value">{totals.open}</p>
           </div>
           <div className="ph-stat">
-            <p className="ph-stat__label">Applicants</p>
+            <p className="ph-stat__label">Total applicants</p>
             <p className="ph-stat__value">{totals.applicants}</p>
           </div>
           <div className="ph-stat">
-            <p className="ph-stat__label">Interviewed</p>
+            <p className="ph-stat__label">Interviews / Reviewed</p>
             <p className="ph-stat__value">{totals.interviewed}</p>
           </div>
           <div className="ph-stat">
-            <p className="ph-stat__label">Shortlisted</p>
+            <p className="ph-stat__label">Shortlisted candidates</p>
             <p className="ph-stat__value">{totals.shortlisted}</p>
           </div>
         </div>
 
-        <section className="ph-home__section">
-          <h2 className="ph-home__section-title">Quick actions</h2>
-          <div className="ph-home__quick">
-            <a className="ph-quick" href={ROUTES.newJob}>
-              <p className="ph-quick__title">Post a job</p>
-              <p className="ph-quick__desc">
-                Describe the role and the skills you need.
-              </p>
-            </a>
-            <a className="ph-quick" href={ROUTES.candidates}>
-              <p className="ph-quick__title">Review candidates</p>
-              <p className="ph-quick__desc">
-                Read transcripts and rubric scores.
-              </p>
-            </a>
-            <a className="ph-quick" href={ROUTES.invites}>
-              <p className="ph-quick__title">Send interview invites</p>
-              <p className="ph-quick__desc">
-                Invite your top candidates to meet in person.
-              </p>
-            </a>
+        {/* Recent Jobs Table */}
+        <div className="ph-home__section">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h2 className="ph-home__heading" style={{ margin: 0 }}>Active Job Postings</h2>
+            <Link to="/recruiter/jobs" style={{ fontSize: "14px", color: "#1a5fa6", textDecoration: "none", fontWeight: "500" }}>
+              View all jobs →
+            </Link>
           </div>
-        </section>
 
-        <section className="ph-home__section">
-          <h2 className="ph-home__section-title">Your jobs</h2>
-
-          {jobs.length === 0 ? (
-            <p className="ph-home__empty">
-              You have not posted any jobs yet. Post your first job to start
-              receiving applications.
-            </p>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#666" }}>
+              <p>Loading your job listings...</p>
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="ph-table-card" style={{ textAlign: "center", padding: "40px 20px" }}>
+              <p style={{ fontSize: "16px", color: "#555", margin: "0 0 12px" }}>
+                You have not created any job postings yet.
+              </p>
+              <Link
+                to="/recruiter/jobs/new"
+                style={{
+                  display: "inline-block",
+                  padding: "8px 16px",
+                  background: "#1a5fa6",
+                  color: "#fff",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  fontWeight: "500",
+                }}
+              >
+                Create your first job posting
+              </Link>
+            </div>
           ) : (
-            <div className="ph-home__jobs">
-              {jobs.map((job) => (
-                <article className="ph-jobrow" key={job.id}>
-                  <div>
-                    <div className="ph-jobrow__top">
-                      <h3 className="ph-jobrow__title">{job.title}</h3>
-                      <span
-                        className={
-                          "ph-badge" +
-                          (job.status === "Closed" ? " ph-badge--closed" : "")
-                        }
-                      >
-                        {job.status}
-                      </span>
-                    </div>
-                    <p className="ph-jobrow__company">{job.company}</p>
-                  </div>
-
-                  <div className="ph-jobrow__nums">
-                    <div>
-                      <p className="ph-num__value">{job.applicants}</p>
-                      <p className="ph-num__label">Applicants</p>
-                    </div>
-                    <div>
-                      <p className="ph-num__value">{job.interviewed}</p>
-                      <p className="ph-num__label">Interviewed</p>
-                    </div>
-                    <div>
-                      <p className="ph-num__value">{job.shortlisted}</p>
-                      <p className="ph-num__label">Shortlisted</p>
-                    </div>
-                  </div>
-
-                  <div className="ph-jobrow__actions">
-                    <a
-                      className="ph-btn ph-btn--ghost"
-                      href={ROUTES.job(job.id)}
-                    >
-                      View ranking
-                    </a>
-                  </div>
-                </article>
-              ))}
+            <div className="ph-table-card">
+              <table className="ph-table">
+                <thead>
+                  <tr>
+                    <th>Job Title</th>
+                    <th>Status</th>
+                    <th>Required Skills</th>
+                    <th>Location</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>
+                        <strong>{job.title}</strong>
+                      </td>
+                      <td>
+                        <span
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            textTransform: "capitalize",
+                            background: job.status === "published" ? "#e3f1d9" : "#f0f0f0",
+                            color: job.status === "published" ? "#2c5a14" : "#666",
+                          }}
+                        >
+                          {job.status === "published" ? "Open" : job.status}
+                        </span>
+                      </td>
+                      <td>
+                        {job.skills && job.skills.length > 0 ? (
+                          <span style={{ fontSize: "13px", color: "#555" }}>
+                            {job.skills.map((s) => s.skill_name).join(", ")}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#999", fontSize: "13px" }}>None specified</span>
+                        )}
+                      </td>
+                      <td style={{ color: "#666" }}>{job.location || "Remote"}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <Link
+                          to={`/recruiter/jobs/${job.id}/candidates`}
+                          style={{
+                            display: "inline-block",
+                            padding: "6px 12px",
+                            background: "#1a5fa6",
+                            color: "#fff",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            fontWeight: "500",
+                            textDecoration: "none",
+                          }}
+                        >
+                          View Candidates
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </section>
+        </div>
       </main>
     </div>
   );

@@ -1,22 +1,67 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
+import { useAuth } from "../context/AuthContext";
 
 export default function SignUp() {
-  const [role, setRole] = useState("candidate");
-  const [form, setForm] = useState({ fullName: "", email: "", password: "" });
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const [role, setRole] = useState("candidate"); // 'candidate' or 'recruiter'
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    phoneNumber: "",
+    location: "",
+  });
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const onChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (error) setError("");
+  };
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!form.fullName.trim()) {
+      setError("Please enter your full name.");
       return;
     }
+    if (!form.email.trim()) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
     setError("");
-    // TODO: call your API here
-    console.log({ role, ...form });
+    setSubmitting(true);
+
+    try {
+      const backendRole = role === "candidate" ? "job_seeker" : "employer";
+      const data = await register({
+        full_name: form.fullName.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        role: backendRole,
+        phone_number: form.phoneNumber.trim() || undefined,
+        location: form.location.trim() || undefined,
+      });
+
+      if (backendRole === "employer") {
+        navigate("/recruiter");
+      } else {
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      setError(err.message || "Registration failed. Please check your information.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -24,7 +69,7 @@ export default function SignUp() {
       <div className="ph-card">
         <h2 className="ph-card__title">Create your account</h2>
         <p className="ph-card__desc">
-          Choose how you will use thibitishaSkillz.
+          Choose how you will use Thibitisha Skills.
         </p>
 
         <div className="ph-toggle">
@@ -57,7 +102,7 @@ export default function SignUp() {
               name="fullName"
               type="text"
               autoComplete="name"
-              placeholder="Amina Wanjiru"
+              placeholder="e.g. Amina Wanjiru"
               value={form.fullName}
               onChange={onChange}
               required
@@ -82,6 +127,37 @@ export default function SignUp() {
           </div>
 
           <div className="ph-field">
+            <label className="ph-label" htmlFor="phoneNumber">
+              Phone number (optional)
+            </label>
+            <input
+              className="ph-input"
+              id="phoneNumber"
+              name="phoneNumber"
+              type="tel"
+              autoComplete="tel"
+              placeholder="+254 712 345 678"
+              value={form.phoneNumber}
+              onChange={onChange}
+            />
+          </div>
+
+          <div className="ph-field">
+            <label className="ph-label" htmlFor="location">
+              Location (optional)
+            </label>
+            <input
+              className="ph-input"
+              id="location"
+              name="location"
+              type="text"
+              placeholder="Nairobi, Kenya"
+              value={form.location}
+              onChange={onChange}
+            />
+          </div>
+
+          <div className="ph-field">
             <label className="ph-label" htmlFor="password">
               Password
             </label>
@@ -100,21 +176,26 @@ export default function SignUp() {
           </div>
 
           {error && (
-            <p className="ph-error" role="alert">
+            <p className="ph-error" role="alert" style={{ marginTop: "12px" }}>
               {error}
             </p>
           )}
 
-          <button className="ph-btn" type="submit">
-            Create account
+          <button
+            className="ph-btn"
+            type="submit"
+            disabled={submitting}
+            style={{ marginTop: "16px" }}
+          >
+            {submitting ? "Creating account..." : "Create account"}
           </button>
         </form>
 
         <p className="ph-card__foot">
           Already have an account?{" "}
-          <a className="ph-link" href="/signin">
+          <Link className="ph-link" to="/signin">
             Sign in
-          </a>
+          </Link>
         </p>
       </div>
     </AuthLayout>

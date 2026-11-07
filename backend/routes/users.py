@@ -112,6 +112,7 @@ def update_candidate_profile(
         setattr(profile, field, value)
     profile.updated_at = utcnow()
     current_user.updated_at = utcnow()
+    db.flush()
     if profile.is_public != was_public:
         recompute_candidate_rankings(db, current_user.id)
     db.commit()
