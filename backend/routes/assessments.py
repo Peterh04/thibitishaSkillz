@@ -206,6 +206,23 @@ def get_assessment(
     return _summary(assessment, verification)
 
 
+@router.delete("/assessments/{assessment_id}", response_model=MessageResponse)
+def abandon_assessment(
+    assessment_id: int,
+    current_user: User = Depends(require_roles(UserRole.job_seeker)),
+    db: Session = Depends(get_db),
+):
+    assessment = _own_assessment(db, assessment_id, current_user)
+    if assessment.status not in [AssessmentStatus.pending, AssessmentStatus.in_progress]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending or in-progress assessments can be abandoned.",
+        )
+    db.delete(assessment)
+    db.commit()
+    return MessageResponse(message="Assessment abandoned successfully")
+
+
 @router.get("/assessments/{assessment_id}/questions", response_model=list[QuestionPublic])
 def get_questions(
     assessment_id: int,
