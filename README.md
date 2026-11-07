@@ -63,6 +63,12 @@ The ultimate goal is to help employers move beyond CV-based recruitment towards 
 
 ## Proof of Demand and Practical Impact
 
+Employers struggle to identify genuinely qualified candidates.
+
+AI is changing how candidates produce CVs, applications and interview responses.
+
+Employers are increasingly interested in skills-based hiring and practical competency assessments.
+
 The 2025 World Economic Forum Future of Jobs Report found:
 
 - 63% of employers identified skills gaps as a major barrier to business transformation.
