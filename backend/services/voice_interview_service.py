@@ -61,10 +61,14 @@ def _latest_usable_cv(db: Session, candidate_id: int, cv_id: int | None) -> CV:
         )
     if cv is None:
         raise ValueError("Upload a CV before starting a voice interview.")
-    if cv.analysis_status == AnalysisStatus.failed:
-        raise ValueError("Your latest CV analysis failed. Upload a clearer CV first.")
-    if not (cv.extracted_text or "").strip() and not cv.analysis_result:
-        raise ValueError("Wait for CV analysis to finish, then start the voice interview.")
+
+    has_text = bool((cv.extracted_text or "").strip())
+    has_analysis = bool(cv.analysis_result and isinstance(cv.analysis_result, dict))
+
+    if not has_text and not has_analysis:
+        if cv.analysis_status == AnalysisStatus.failed:
+            raise ValueError("Your latest CV analysis failed and no text could be extracted. Upload a clearer PDF or DOCX file first.")
+        raise ValueError("Wait for CV text extraction to finish, then start the voice interview.")
     return cv
 
 
@@ -101,7 +105,12 @@ def start_interview(
         .first()
     )
     if existing is not None:
-        raise ValueError("You already have an active voice interview. Finish or cancel it first.")
+        return (
+            db.query(VoiceInterview)
+            .options(joinedload(VoiceInterview.turns), joinedload(VoiceInterview.skill))
+            .filter(VoiceInterview.id == existing.id)
+            .one()
+        )
 
     cv = _latest_usable_cv(db, candidate.id, cv_id)
     skill = None

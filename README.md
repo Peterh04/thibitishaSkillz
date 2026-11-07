@@ -76,3 +76,25 @@ The 2025 World Economic Forum Future of Jobs Report found:
 - 70% expected to hire people with new skills.
 - Analytical thinking remained the most sought-after core skill.
 
+## Potential Impact
+
+- Improved hiring accuracy: Helps employers identify candidates with demonstrable skills, not just impressive CVs.
+
+- Fairer recruitment: Promotes consistent, evidence-based evaluation of candidates against job requirements.
+
+- Better job matching: Connects candidates to opportunities that align with their actual competencies.
+
+- Reduced skills mismatch: Helps employers identify competency gaps and make more informed hiring decisions.
+
+- Greater employability: Gives candidates clearer feedback on their strengths and areas requiring improvement.
+
+## Future Improvements
+
+1. AI-Powered Role Recommendations: Suggest alternative job roles that better match candidates' skills, qualifications and experience when they are not suitable for their initial application.
+
+2. Personalised Skills-Gap Analysis: Identify missing competencies and recommend relevant courses, certifications and learning resources to improve employability.
+
+3. Career Pathway Guidance: Recommend potential career paths and progression opportunities based on candidates' existing skills and interests.
+
+4. Continuous Competency Profiles: Maintain updated candidate profiles that reflect newly acquired skills, completed assessments and demonstrated competencies
+
