@@ -48,7 +48,7 @@ The platform evaluates candidates' responses against the skills and experience c
 
 It then generates a shortlist of the top 10 candidates and prospective top 10 candidates, while facilitating automated SMS and email notifications to shortlisted applicants for final interviews.
 
-## MAIN AIM 
+## Main Aim
 
 The ultimate goal is to help employers move beyond CV-based recruitment towards a more efficient, transparent and evidence-based hiring process that prioritises demonstrated competence over self-reported qualifications.
 
