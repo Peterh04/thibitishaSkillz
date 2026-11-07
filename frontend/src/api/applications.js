@@ -17,6 +17,16 @@ export const applicationsApi = {
   },
 
   /**
+   * Alias for applyToJob.
+   */
+  applyForJob(jobId, data = {}) {
+    return apiClient(`/api/jobs/${jobId}/apply`, {
+      method: "POST",
+      body: data,
+    });
+  },
+
+  /**
    * Candidate lists their submitted applications.
    * @param {Object} params - { page?, page_size? }
    */

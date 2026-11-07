@@ -167,6 +167,9 @@ def create_job(
     )
     db.add(job)
     db.flush()
+    if payload.skills:
+        _replace_skills(db, job, JobSkillsRequest(skills=payload.skills))
+        db.flush()
     if payload.status == JobStatus.published:
         _require_publishable(db, job)
         job.status = JobStatus.published

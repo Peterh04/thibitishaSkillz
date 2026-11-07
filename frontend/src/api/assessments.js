@@ -41,6 +41,25 @@ export const assessmentsApi = {
   },
 
   /**
+   * Fetch synthesized audio blob for a question (MsingiAI TTS).
+   * @param {number} assessmentId
+   * @param {number} questionId
+   */
+  async getQuestionAudio(assessmentId, questionId) {
+    const token = localStorage.getItem("token");
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+    const response = await fetch(`${baseUrl}/api/assessments/${assessmentId}/questions/${questionId}/audio`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Audio unavailable (HTTP ${response.status})`);
+    }
+    return await response.blob();
+  },
+
+  /**
    * Submit answers for all assessment questions.
    * @param {number} assessmentId
    * @param {Object} data - { answers: [{ question_id: number, candidate_answer: string }] }

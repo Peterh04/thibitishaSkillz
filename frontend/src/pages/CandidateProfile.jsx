@@ -1,266 +1,339 @@
-import { useRef, useState } from "react";
-import "../styles/candidate-profile.css";
+import { useEffect, useRef, useState } from "react";
+import AppShell from "../components/layout/AppShell";
+import { useAuth } from "../context/AuthContext";
+import usersApi from "../api/users";
+import cvApi from "../api/cv";
+import applicationsApi from "../api/applications";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Textarea from "../components/ui/Textarea";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import Skeleton from "../components/ui/Skeleton";
+import {
+  IconUser,
+  IconFileText,
+  IconUploadCloud,
+  IconCheck,
+  IconShield,
+  IconBriefcase,
+  IconExternalLink,
+} from "../components/ui/Icons";
 
-// Replace with data from your API
-const PROFILE = {
-  fullName: "Amina Wanjiru",
-  email: "amina@email.com",
-  phone: "+254 712 345 678",
-  cv: { name: "Amina_Wanjiru_CV.pdf", uploaded: "2 Nov 2026" },
-};
+export default function CandidateProfile() {
+  const { user, fetchCurrentUser } = useAuth();
+  const fileInputRef = useRef(null);
 
-const APPLICATIONS = [
-  {
-    id: 1,
-    title: "Junior Data Analyst",
-    company: "Acme Insurance",
-    applied: "2 Nov 2026",
-    status: "Shortlisted",
-  },
-  {
-    id: 2,
-    title: "Cloud Support Associate",
-    company: "[COMPANY]",
-    applied: "5 Nov 2026",
-    status: "Interview invited",
-    interviewUrl: "/interview",
-  },
-  {
-    id: 3,
-    title: "Mobile Developer Intern",
-    company: "[COMPANY]",
-    applied: "20 Oct 2026",
-    status: "Not selected",
-  },
-];
-
-// Adjust these routes to match your router
-const ROUTES = { jobs: "/jobs", profile: "/profile" };
-
-const badgeClass = (status) => {
-  if (status === "Shortlisted") return "ph-badge ph-badge--good";
-  if (status === "Not selected") return "ph-badge ph-badge--grey";
-  return "ph-badge";
-};
-
-const initials = (name) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0].toUpperCase())
-    .join("");
-
-export default function CandidateProfile({
-  profile = PROFILE,
-  applications = APPLICATIONS,
-}) {
-  const fileInput = useRef(null);
-  const [fullName, setFullName] = useState(profile.fullName);
-  const [phone, setPhone] = useState(profile.phone);
-  const [cv, setCv] = useState(profile.cv);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [uploadingCv, setUploadingCv] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    phoneNumber: "",
+    location: "",
+    bio: "",
+    githubUrl: "",
+    portfolioUrl: "",
+  });
+
+  const [cv, setCv] = useState(null);
+  const [applications, setApplications] = useState([]);
+
+  useEffect(() => {
+    async function loadProfile() {
+      setLoading(true);
+      setError("");
+      try {
+        const [meData, cvData, appsData] = await Promise.all([
+          usersApi.getMyAccount().catch(() => null),
+          cvApi.getMyCv().catch(() => null),
+          applicationsApi.getMyApplications().catch(() => ({ items: [] })),
+        ]);
+
+        if (meData) {
+          setForm({
+            fullName: meData.full_name || user?.full_name || "",
+            email: meData.email || user?.email || "",
+            phoneNumber: meData.phone_number || "",
+            location: meData.location || "",
+            bio: meData.bio || "",
+            githubUrl: meData.candidate_profile?.github_url || "",
+            portfolioUrl: meData.candidate_profile?.portfolio_url || "",
+          });
+        }
+        setCv(cvData);
+        setApplications(appsData.items || []);
+      } catch (err) {
+        setError(err.message || "Failed to load profile details.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, [user]);
+
+  const onChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (error) setError("");
+  };
 
   const onSave = async (e) => {
     e.preventDefault();
-    if (!fullName.trim()) {
-      return setMessage({ type: "error", text: "Enter your full name." });
+    if (!form.fullName.trim()) {
+      setError("Please provide your full name.");
+      return;
     }
-    if (phone.replace(/\D/g, "").length < 9) {
-      return setMessage({ type: "error", text: "Enter a valid phone number." });
-    }
+
     setSaving(true);
+    setError("");
+    setSuccess("");
+
     try {
-      // TODO: await fetch("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName, phone }) });
-      setMessage({ type: "ok", text: "Changes saved." });
+      await usersApi.updateMyAccount({
+        full_name: form.fullName.trim(),
+        phone_number: form.phoneNumber.trim() || undefined,
+        location: form.location.trim() || undefined,
+        bio: form.bio.trim() || undefined,
+      });
+
+      if (form.githubUrl || form.portfolioUrl) {
+        await usersApi.updateCandidateProfile({
+          github_url: form.githubUrl.trim() || undefined,
+          portfolio_url: form.portfolioUrl.trim() || undefined,
+        });
+      }
+
+      await fetchCurrentUser?.();
+      setSuccess("Profile settings saved successfully.");
+    } catch (err) {
+      setError(err.message || "Failed to save profile changes.");
     } finally {
       setSaving(false);
     }
   };
 
-  const onPickCv = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (f.type !== "application/pdf") {
-      return setMessage({ type: "error", text: "Upload your CV as a PDF." });
-    }
-    // TODO: upload with FormData to your API
-    setCv({ name: f.name, uploaded: "Just now" });
-    setMessage({ type: "ok", text: "CV updated." });
-  };
+  const handleCvUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleSignOut = () => {
-    // TODO: clear session and redirect
-    console.log("sign out");
+    setUploadingCv(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const newCv = await cvApi.uploadCv(formData);
+      setCv(newCv);
+      setSuccess("CV updated successfully.");
+    } catch (err) {
+      setError(err.message || "Failed to upload new CV.");
+    } finally {
+      setUploadingCv(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
-    <div className="ph-cp">
-      <header className="ph-cp__bar">
-        <a className="ph-cp__logo" href="/">
-          <span className="ph-cp__logo-mark" />
-          ProofHire
-        </a>
-        <nav className="ph-cp__nav">
-          <a className="ph-cp__nav-link" href={ROUTES.jobs}>
-            Open jobs
-          </a>
-          <a
-            className="ph-cp__nav-link ph-cp__nav-link--active"
-            href={ROUTES.profile}
+    <AppShell>
+      <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+        {/* Page Title */}
+        <div style={{ marginBottom: "var(--space-6)" }}>
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-semibold)",
+              letterSpacing: "var(--tracking-tighter)",
+              color: "var(--text)",
+              marginBottom: "var(--space-2)",
+            }}
           >
-            Profile
-          </a>
-          <button
-            className="ph-cp__nav-link"
-            type="button"
-            onClick={handleSignOut}
-          >
-            Sign out
-          </button>
-        </nav>
-      </header>
-
-      <main className="ph-cp__main">
-        <div className="ph-cp__head">
-          <span className="ph-cp__avatar" aria-hidden="true">
-            {initials(fullName)}
-          </span>
-          <div>
-            <h1 className="ph-cp__title">{fullName}</h1>
-            <p className="ph-cp__sub">{profile.email}</p>
-          </div>
+            Candidate Profile & Account
+          </h1>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+            Keep your contact details, portfolio links, and resume up to date for hiring employers.
+          </p>
         </div>
 
-        <div className="ph-cp__grid">
-          <div>
-            <section className="ph-cp__card">
-              <h2 className="ph-cp__card-title">Your details</h2>
-              <form onSubmit={onSave} noValidate>
-                <div className="ph-cp__field">
-                  <label className="ph-cp__label" htmlFor="fullName">
-                    Full name
-                  </label>
-                  <input
-                    className="ph-cp__input"
+        {error && (
+          <Alert variant="danger" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-5)" }}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success" onDismiss={() => setSuccess("")} style={{ marginBottom: "var(--space-5)" }}>
+            {success}
+          </Alert>
+        )}
+
+        {loading ? (
+          <Card>
+            <CardBody style={{ padding: "var(--space-8)" }}>
+              <Skeleton height="32px" width="40%" style={{ marginBottom: "var(--space-4)" }} />
+              <Skeleton height="40px" width="100%" style={{ marginBottom: "var(--space-4)" }} />
+              <Skeleton height="40px" width="100%" />
+            </CardBody>
+          </Card>
+        ) : (
+          <form onSubmit={onSave} noValidate>
+            {/* Personal Details Card */}
+            <Card style={{ marginBottom: "var(--space-6)" }}>
+              <CardHeader>
+                <div>
+                  <CardTitle>Personal Information</CardTitle>
+                  <CardDescription>Your name and primary contact coordinates.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+                  <Input
+                    label="Full name"
                     id="fullName"
-                    type="text"
-                    autoComplete="name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    name="fullName"
+                    required
+                    value={form.fullName}
+                    onChange={onChange}
                   />
-                </div>
-
-                <div className="ph-cp__field">
-                  <label className="ph-cp__label" htmlFor="email">
-                    Email
-                  </label>
-                  <input
-                    className="ph-cp__input"
+                  <Input
+                    label="Email address"
                     id="email"
+                    name="email"
                     type="email"
-                    value={profile.email}
                     disabled
+                    value={form.email}
+                    helper="Email cannot be changed"
                   />
                 </div>
 
-                <div className="ph-cp__field">
-                  <label className="ph-cp__label" htmlFor="phone">
-                    Phone number
-                  </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+                  <Input
+                    label="Phone number"
+                    id="phoneNumber"
+                    name="phoneNumber"
+                    placeholder="+254 700 000 000"
+                    value={form.phoneNumber}
+                    onChange={onChange}
+                  />
+                  <Input
+                    label="Location"
+                    id="location"
+                    name="location"
+                    placeholder="Nairobi, Kenya"
+                    value={form.location}
+                    onChange={onChange}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+                  <Input
+                    label="GitHub profile URL"
+                    id="githubUrl"
+                    name="githubUrl"
+                    placeholder="https://github.com/username"
+                    value={form.githubUrl}
+                    onChange={onChange}
+                  />
+                  <Input
+                    label="Portfolio or website"
+                    id="portfolioUrl"
+                    name="portfolioUrl"
+                    placeholder="https://mywork.dev"
+                    value={form.portfolioUrl}
+                    onChange={onChange}
+                  />
+                </div>
+
+                <Textarea
+                  label="Bio / Technical Summary"
+                  id="bio"
+                  name="bio"
+                  rows={3}
+                  placeholder="Brief summary of your technical background, domain focus, and key interests..."
+                  value={form.bio}
+                  onChange={onChange}
+                />
+              </CardBody>
+              <CardFooter>
+                <Button type="submit" variant="primary" size="md" loading={saving}>
+                  Save Profile Changes
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Active CV Document Card */}
+            <Card style={{ marginBottom: "var(--space-6)" }}>
+              <CardHeader>
+                <div>
+                  <CardTitle>Curriculum Vitae</CardTitle>
+                  <CardDescription>The active document sent to employers when applying.</CardDescription>
+                </div>
+                <div>
                   <input
-                    className="ph-cp__input"
-                    id="phone"
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder="+254 712 345 678"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.doc"
+                    style={{ display: "none" }}
+                    onChange={handleCvUpload}
                   />
-                  <p className="ph-cp__hint">
-                    We text your interview link to this number.
-                  </p>
-                </div>
-
-                {message.text && (
-                  <p
-                    className={"ph-cp__msg ph-cp__msg--" + message.type}
-                    role={message.type === "error" ? "alert" : "status"}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<IconUploadCloud size={14} />}
+                    onClick={() => fileInputRef.current?.click()}
+                    loading={uploadingCv}
                   >
-                    {message.text}
+                    Upload New Version
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
+                {cv ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--surface-raised)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      <IconFileText size={24} color="var(--accent)" />
+                      <div>
+                        <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                          {cv.filename || "Uploaded_CV.pdf"}
+                        </strong>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--text-muted)",
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          Uploaded {cv.created_at ? new Date(cv.created_at).toLocaleDateString() : "Recently"}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant="success">Active</Badge>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+                    No CV uploaded. Upload your CV to enable AI parsing and 1-click job applications.
                   </p>
                 )}
-
-                <button
-                  className="ph-btn ph-btn--full"
-                  type="submit"
-                  disabled={saving}
-                >
-                  {saving ? "Saving..." : "Save changes"}
-                </button>
-              </form>
-            </section>
-
-            <section className="ph-cp__card">
-              <h2 className="ph-cp__card-title">Your CV</h2>
-              <div className="ph-cv">
-                <div>
-                  <p className="ph-cv__name">
-                    {cv ? cv.name : "No CV uploaded"}
-                  </p>
-                  {cv && <p className="ph-cv__meta">Uploaded {cv.uploaded}</p>}
-                </div>
-                <button
-                  className="ph-btn ph-btn--ghost"
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                >
-                  {cv ? "Replace PDF" : "Choose PDF"}
-                </button>
-                <input
-                  ref={fileInput}
-                  className="ph-cv__input"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={onPickCv}
-                />
-              </div>
-            </section>
-          </div>
-
-          <section className="ph-cp__card">
-            <h2 className="ph-cp__card-title">Your applications</h2>
-            {applications.length === 0 ? (
-              <p className="ph-cp__empty">
-                You have not applied to any jobs yet.{" "}
-                <a href={ROUTES.jobs}>Browse open jobs</a>
-              </p>
-            ) : (
-              <ul className="ph-apps">
-                {applications.map((a) => (
-                  <li className="ph-app" key={a.id}>
-                    <div>
-                      <p className="ph-app__title">{a.title}</p>
-                      <p className="ph-app__meta">
-                        {a.company} · Applied {a.applied}
-                      </p>
-                    </div>
-                    <div className="ph-app__right">
-                      <span className={badgeClass(a.status)}>{a.status}</span>
-                      {a.interviewUrl && (
-                        <a className="ph-app__link" href={a.interviewUrl}>
-                          Start interview
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </main>
-    </div>
+              </CardBody>
+            </Card>
+          </form>
+        )}
+      </div>
+    </AppShell>
   );
 }

@@ -130,3 +130,31 @@ def test_assessment_flow_full(client, job_seeker_headers, sample_skill, mock_que
     assert single_v.status_code == status.HTTP_200_OK
     assert single_v.json()["score"] == 75.0
 
+
+def test_assessment_question_audio(client, job_seeker_headers, sample_skill, mock_questions):
+    client.post(
+        "/api/skills/my-skills",
+        headers=job_seeker_headers,
+        json={"skill_id": sample_skill.id, "claimed_level": "intermediate"},
+    )
+    with patch("backend.routes.assessments.generate_questions", return_value=mock_questions):
+        start_res = client.post(
+            "/api/assessments/start",
+            headers=job_seeker_headers,
+            json={"skill_id": sample_skill.id, "difficulty_level": "intermediate"},
+        )
+    assessment_id = start_res.json()["id"]
+    q_res = client.get(f"/api/assessments/{assessment_id}/questions", headers=job_seeker_headers)
+    q1 = q_res.json()[0]
+
+    with patch("backend.routes.assessments.settings.MSINGI_API_KEY", "test_key"), \
+         patch("backend.services.msingi_service.create_speech", return_value=b"RIFFWAVE"):
+        audio_res = client.get(
+            f"/api/assessments/{assessment_id}/questions/{q1['id']}/audio",
+            headers=job_seeker_headers,
+        )
+        assert audio_res.status_code == status.HTTP_200_OK
+        assert audio_res.headers["content-type"] == "audio/wav"
+        assert audio_res.content == b"RIFFWAVE"
+
+

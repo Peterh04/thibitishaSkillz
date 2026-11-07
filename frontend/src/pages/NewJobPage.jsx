@@ -1,10 +1,24 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import AppShell from "../components/layout/AppShell";
 import jobsApi from "../api/jobs";
 import skillsApi from "../api/skills";
 import employersApi from "../api/employers";
-import "../styles/jobs.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Textarea from "../components/ui/Textarea";
+import Select from "../components/ui/Select";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import {
+  IconArrowLeft,
+  IconPlus,
+  IconTrash,
+  IconBriefcase,
+  IconAward,
+  IconBuilding,
+} from "../components/ui/Icons";
 
 export default function NewJobPage() {
   const navigate = useNavigate();
@@ -21,14 +35,16 @@ export default function NewJobPage() {
     status: "published",
   });
 
+  const [employerProfile, setEmployerProfile] = useState(null);
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
+
   const [availableSkills, setAvailableSkills] = useState([]);
-  const [selectedSkills, setSelectedSkills] = useState([]); // [{ skill_id, skill_name, minimum_score, importance_weight }]
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [currentSkillId, setCurrentSkillId] = useState("");
   const [currentMinScore, setCurrentMinScore] = useState(60);
   const [currentWeight, setCurrentWeight] = useState(1);
 
-  const [employerProfile, setEmployerProfile] = useState(null);
-  const [companyName, setCompanyName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,16 +52,17 @@ export default function NewJobPage() {
     async function init() {
       try {
         const [skillsData, profData] = await Promise.all([
-          skillsApi.getSkills(),
+          skillsApi.getSkills().catch(() => []),
           employersApi.getProfile().catch(() => null),
         ]);
         setAvailableSkills(skillsData || []);
         setEmployerProfile(profData);
         if (profData?.company_name) {
           setCompanyName(profData.company_name);
+          setIndustry(profData.industry || "");
         }
       } catch (err) {
-        console.warn("Failed to load initial skills or profile:", err.message);
+        console.warn("Failed to load skills or employer profile:", err.message);
       }
     }
     init();
@@ -62,7 +79,7 @@ export default function NewJobPage() {
     if (!skillObj) return;
 
     if (selectedSkills.some((s) => s.skill_id === skillObj.id)) {
-      setError("This skill is already added.");
+      setError("This skill has already been added to the requirements.");
       return;
     }
 
@@ -71,7 +88,7 @@ export default function NewJobPage() {
       {
         skill_id: skillObj.id,
         skill_name: skillObj.name,
-        minimum_score: parseInt(currentMinScore, 10) || 50,
+        minimum_score: parseInt(currentMinScore, 10) || 60,
         importance_weight: parseInt(currentWeight, 10) || 1,
       },
     ]);
@@ -83,44 +100,46 @@ export default function NewJobPage() {
     setSelectedSkills(selectedSkills.filter((s) => s.skill_id !== skillId));
   };
 
-  const onSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      setError("Please enter a job title.");
+      setError("Please specify a position title.");
       return;
     }
     if (!form.description.trim()) {
-      setError("Please enter a job description.");
-      return;
-    }
-    if (selectedSkills.length === 0) {
-      setError("Please add at least one required skill for automated verification matching.");
+      setError("Please provide a description of the role.");
       return;
     }
 
-    setSubmitting(true);
+    // Check if company name is set
+    const finalCompanyName = companyName.trim() || employerProfile?.company_name;
+    if (!finalCompanyName && form.status === "published") {
+      setError("Please specify your company or organization name before publishing.");
+      return;
+    }
+
+    // Check required skill for publishing
+    if (form.status === "published" && selectedSkills.length === 0) {
+      setError(
+        "Before publishing, please add at least one required skill using the 'Add Requirement' button below. Alternatively, you can select 'Save as Draft'."
+      );
+      return;
+    }
+
     setError("");
+    setSubmitting(true);
 
     try {
-      // 1. Ensure employer company name exists
-      if (!employerProfile?.company_name && companyName.trim()) {
-        await employersApi.updateProfile({ company_name: companyName.trim() });
+      // 1. If employer profile doesn't have company_name yet, save it
+      if (!employerProfile?.company_name && finalCompanyName) {
+        await employersApi.updateProfile({
+          company_name: finalCompanyName,
+          industry: industry.trim() || undefined,
+        });
       }
 
-      // 2. Format deadline if provided
-      let deadlineIso = undefined;
-      if (form.application_deadline) {
-        const d = new Date(form.application_deadline);
-        deadlineIso = d.toISOString();
-      } else {
-        // Default deadline: 30 days in future
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        deadlineIso = d.toISOString();
-      }
-
-      // 3. Create job
-      const jobData = {
+      // 2. Prepare payload
+      const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
         responsibilities: form.responsibilities.trim() || undefined,
@@ -128,344 +147,378 @@ export default function NewJobPage() {
         location: form.location.trim() || undefined,
         employment_type: form.employment_type,
         experience_level: form.experience_level,
-        application_deadline: deadlineIso,
-        status: "draft", // create as draft first so skills can be attached before publishing
-      };
-
-      const createdJob = await jobsApi.createJob(jobData);
-
-      // 4. Attach skills
-      const skillsPayload = {
+        application_deadline: form.application_deadline ? new Date(form.application_deadline).toISOString() : undefined,
+        status: form.status,
         skills: selectedSkills.map((s) => ({
           skill_id: s.skill_id,
           minimum_score: s.minimum_score,
           importance_weight: s.importance_weight,
         })),
       };
-      await jobsApi.addJobSkills(createdJob.id, skillsPayload);
 
-      // 5. Publish if requested
-      if (form.status === "published") {
-        await jobsApi.updateJob(createdJob.id, { status: "published" });
+      const createdJob = await jobsApi.createJob(payload);
+
+      // 3. Fallback: ensure skills are linked
+      if (selectedSkills.length > 0 && (!createdJob.skills || createdJob.skills.length === 0)) {
+        await jobsApi.addJobSkills(createdJob.id, {
+          skills: selectedSkills.map((s) => ({
+            skill_id: s.skill_id,
+            minimum_score: s.minimum_score,
+            importance_weight: s.importance_weight,
+          })),
+        });
+
+        if (form.status === "published") {
+          await jobsApi.updateJob(createdJob.id, { status: "published" });
+        }
       }
 
       navigate("/recruiter/jobs");
     } catch (err) {
-      setError(err.message || "Failed to create job posting.");
+      setError(err.message || "Failed to create job requisition.");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="ph-jobs">
-      <Navbar />
-
-      <main className="ph-jobs__main" style={{ maxWidth: "840px" }}>
-        <div style={{ marginBottom: "28px" }}>
-          <Link to="/recruiter/jobs" style={{ fontSize: "14px", color: "#1a5fa6", textDecoration: "none" }}>
-            ← Back to posted jobs
+    <AppShell>
+      <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+        {/* Navigation back */}
+        <div style={{ marginBottom: "var(--space-6)" }}>
+          <Link
+            to="/recruiter/jobs"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "var(--font-size-sm)",
+              color: "var(--text-muted)",
+              fontWeight: "var(--font-weight-medium)",
+            }}
+          >
+            <IconArrowLeft size={16} /> Back to Job Postings
           </Link>
-          <h1 className="ph-jobs__title" style={{ marginTop: "12px" }}>Post a New Job</h1>
-          <p className="ph-jobs__desc">
-            Define requirements and verified skills. Candidates will be ranked automatically by demonstrated ability.
+        </div>
+
+        {/* Title */}
+        <div style={{ marginBottom: "var(--space-6)" }}>
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-semibold)",
+              letterSpacing: "var(--tracking-tighter)",
+              color: "var(--text)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Create New Requisition
+          </h1>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: 0 }}>
+            Post a verified technical role with explicit skill score thresholds for candidate matching.
           </p>
         </div>
 
         {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
+          <Alert variant="danger" title="Notice" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-6)" }}>
             {error}
-          </div>
+          </Alert>
         )}
 
-        <form onSubmit={onSubmit} style={{ background: "#fff", padding: "32px", borderRadius: "12px", border: "1px solid #e8e8e6" }}>
-          {/* Company Name if missing */}
-          {!employerProfile?.company_name && (
-            <div style={{ marginBottom: "20px", background: "#f8f9fa", padding: "16px", borderRadius: "8px" }}>
-              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>
-                Company Name *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Safaricom, Acme Health, KCB"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
-                style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
-              />
-            </div>
+        <form onSubmit={handleSubmit} noValidate>
+          {/* Section 0: Company Info if profile missing company_name */}
+          {(!employerProfile || !employerProfile.company_name) && (
+            <Card style={{ marginBottom: "var(--space-6)", borderLeft: "3px solid var(--accent)" }}>
+              <CardHeader>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <IconBuilding size={18} color="var(--accent)" />
+                  <div>
+                    <CardTitle>Hiring Organization Details</CardTitle>
+                    <CardDescription>
+                      Your employer profile requires a registered company name before jobs can be published.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+                  <Input
+                    label="Company / Organization Name"
+                    id="companyName"
+                    name="companyName"
+                    required
+                    placeholder="e.g. Acme Corporation"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                  />
+                  <Input
+                    label="Industry / Domain"
+                    id="industry"
+                    name="industry"
+                    placeholder="e.g. Fintech, Healthcare, Cloud"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                  />
+                </div>
+              </CardBody>
+            </Card>
           )}
 
-          {/* Job Title */}
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>
-              Job Title *
-            </label>
-            <input
-              type="text"
-              name="title"
-              placeholder="e.g. Senior Full-Stack Engineer"
-              value={form.title}
-              onChange={onChange}
-              required
-              style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "15px", boxSizing: "border-box" }}
-            />
-          </div>
-
-          {/* Description */}
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>
-              About the Role / Overview *
-            </label>
-            <textarea
-              name="description"
-              rows={4}
-              placeholder="Describe what the team does and what success looks like in this position..."
-              value={form.description}
-              onChange={onChange}
-              required
-              style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "14px", boxSizing: "border-box", resize: "vertical" }}
-            />
-          </div>
-
-          {/* Grid: Location, Employment Type, Experience Level */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px" }}>
-                Location
-              </label>
-              <input
-                type="text"
-                name="location"
-                placeholder="e.g. Nairobi, Kenya or Remote"
-                value={form.location}
+          {/* Section 1: Role Overview */}
+          <Card style={{ marginBottom: "var(--space-6)" }}>
+            <CardHeader>
+              <CardTitle>Role Details</CardTitle>
+            </CardHeader>
+            <CardBody style={{ padding: "var(--space-6)" }}>
+              <Input
+                label="Position Title"
+                id="title"
+                name="title"
+                required
+                placeholder="e.g. Senior Backend Engineer (Python / FastAPI)"
+                value={form.title}
                 onChange={onChange}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
               />
-            </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px" }}>
-                Employment Type
-              </label>
-              <select
-                name="employment_type"
-                value={form.employment_type}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
+                <Input
+                  label="Location"
+                  id="location"
+                  name="location"
+                  placeholder="e.g. Nairobi, Kenya or Remote"
+                  value={form.location}
+                  onChange={onChange}
+                />
+
+                <Select
+                  label="Employment Type"
+                  id="employment_type"
+                  name="employment_type"
+                  value={form.employment_type}
+                  onChange={onChange}
+                >
+                  <option value="full_time">Full Time</option>
+                  <option value="part_time">Part Time</option>
+                  <option value="contract">Contract</option>
+                  <option value="internship">Internship</option>
+                </Select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-4)" }}>
+                <Select
+                  label="Seniority Level"
+                  id="experience_level"
+                  name="experience_level"
+                  value={form.experience_level}
+                  onChange={onChange}
+                >
+                  <option value="entry">Entry Level / Junior</option>
+                  <option value="mid">Mid Level</option>
+                  <option value="senior">Senior Engineer</option>
+                  <option value="lead">Tech Lead / Principal</option>
+                </Select>
+
+                <Select
+                  label="Publication Status"
+                  id="status"
+                  name="status"
+                  value={form.status}
+                  onChange={onChange}
+                >
+                  <option value="published">Publish Immediately</option>
+                  <option value="draft">Save as Draft</option>
+                </Select>
+
+                <Input
+                  label="Application Deadline"
+                  id="application_deadline"
+                  name="application_deadline"
+                  type="date"
+                  value={form.application_deadline}
+                  onChange={onChange}
+                />
+              </div>
+
+              <Textarea
+                label="Role Description"
+                id="description"
+                name="description"
+                required
+                rows={4}
+                placeholder="Overview of the engineering team, tech stack, and primary mission..."
+                value={form.description}
                 onChange={onChange}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
-              >
-                <option value="full_time">Full Time</option>
-                <option value="part_time">Part Time</option>
-                <option value="contract">Contract</option>
-                <option value="remote">Remote</option>
-                <option value="internship">Internship</option>
-              </select>
-            </div>
+              />
 
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px" }}>
-                Experience Level
-              </label>
-              <select
-                name="experience_level"
-                value={form.experience_level}
-                onChange={onChange}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
-              >
-                <option value="entry">Entry Level</option>
-                <option value="mid">Mid Level</option>
-                <option value="senior">Senior</option>
-                <option value="lead">Lead / Architect</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Responsibilities & Qualifications */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px" }}>
-                Key Responsibilities (optional)
-              </label>
-              <textarea
+              <Textarea
+                label="Key Responsibilities"
+                id="responsibilities"
                 name="responsibilities"
                 rows={3}
-                placeholder="• Build and maintain APIs&#10;• Collaborate with product teams"
+                placeholder="Core day-to-day expectations and engineering deliverables..."
                 value={form.responsibilities}
                 onChange={onChange}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "13px", boxSizing: "border-box" }}
               />
-            </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px" }}>
-                Qualifications (optional)
-              </label>
-              <textarea
+              <Textarea
+                label="Qualifications & Architecture Background"
+                id="qualifications"
                 name="qualifications"
                 rows={3}
-                placeholder="• Degree or equivalent portfolio&#10;• Experience with microservices"
+                placeholder="Required technical background, distributed systems experience, etc..."
                 value={form.qualifications}
                 onChange={onChange}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "13px", boxSizing: "border-box" }}
               />
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
-          {/* Required Skills Section */}
-          <div style={{ borderTop: "1px solid #e8e8e6", paddingTop: "24px", marginBottom: "28px" }}>
-            <h3 style={{ fontSize: "16px", fontWeight: "600", margin: "0 0 4px" }}>
-              Required Technical Skills & Verification Criteria *
-            </h3>
-            <p style={{ fontSize: "13px", color: "#666", margin: "0 0 16px" }}>
-              Thibitisha Skills uses these skills to automatically score, rank, and match candidate applications.
-            </p>
-
-            {/* Add skill row */}
-            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px", background: "#f8f9fa", padding: "14px", borderRadius: "8px" }}>
-              <div style={{ flex: 2, minWidth: "200px" }}>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "4px" }}>Skill</label>
-                <select
-                  value={currentSkillId}
-                  onChange={(e) => setCurrentSkillId(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #d4d4d4" }}
-                >
-                  <option value="">Select skill...</option>
-                  {availableSkills.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.category})
-                    </option>
-                  ))}
-                </select>
+          {/* Section 2: Required Verified Skills */}
+          <Card style={{ marginBottom: "var(--space-6)" }}>
+            <CardHeader>
+              <div>
+                <CardTitle>Required Verified Skills & Thresholds</CardTitle>
+                <CardDescription>
+                  Candidates who meet or exceed these scores will be automatically ranked at the top of your applicant list.
+                </CardDescription>
               </div>
-
-              <div style={{ flex: 1, minWidth: "120px" }}>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "4px" }}>Min Passing %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={currentMinScore}
-                  onChange={(e) => setCurrentMinScore(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
-                />
-              </div>
-
-              <div style={{ flex: 1, minWidth: "100px" }}>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "4px" }}>Weight (1-5)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={currentWeight}
-                  onChange={(e) => setCurrentWeight(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #d4d4d4", boxSizing: "border-box" }}
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleAddSkill}
-                disabled={!currentSkillId}
+            </CardHeader>
+            <CardBody style={{ padding: "var(--space-6)" }}>
+              {/* Add Skill Row */}
+              <div
                 style={{
-                  padding: "9px 18px",
-                  background: "#1a5fa6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "500",
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 1fr auto",
+                  gap: "var(--space-3)",
+                  alignItems: "flex-end",
+                  padding: "var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  backgroundColor: "var(--surface-raised)",
+                  marginBottom: "var(--space-4)",
                 }}
               >
-                + Add Skill
-              </button>
-            </div>
-
-            {/* Selected skills list */}
-            {selectedSkills.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {selectedSkills.map((s) => (
-                  <div
-                    key={s.skill_id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "10px 14px",
-                      background: "#fff",
-                      border: "1px solid #e8e8e6",
-                      borderRadius: "6px",
-                    }}
+                <div>
+                  <label className="tb-label" style={{ marginBottom: "var(--space-1)" }}>
+                    Technical Skill
+                  </label>
+                  <select
+                    className="tb-select"
+                    value={currentSkillId}
+                    onChange={(e) => setCurrentSkillId(e.target.value)}
                   >
-                    <div>
-                      <strong style={{ fontSize: "14px" }}>{s.skill_name}</strong>
-                      <span style={{ fontSize: "12px", color: "#666", marginLeft: "12px" }}>
-                        Minimum score: {s.minimum_score}% · Importance weight: {s.importance_weight}x
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSkill(s.skill_id)}
-                      style={{ background: "none", border: "none", color: "#b42318", cursor: "pointer", fontSize: "13px" }}
-                    >
-                      ✕ Remove
-                    </button>
-                  </div>
-                ))}
+                    <option value="">Select skill...</option>
+                    {availableSkills
+                      .filter((as) => !selectedSkills.some((s) => s.skill_id === as.id))
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.category})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="tb-label" style={{ marginBottom: "var(--space-1)" }}>
+                    Min Score (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    step={5}
+                    className="tb-input"
+                    value={currentMinScore}
+                    onChange={(e) => setCurrentMinScore(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="tb-label" style={{ marginBottom: "var(--space-1)" }}>
+                    Weight
+                  </label>
+                  <select
+                    className="tb-select"
+                    value={currentWeight}
+                    onChange={(e) => setCurrentWeight(e.target.value)}
+                  >
+                    <option value="1">1 (Standard)</option>
+                    <option value="2">2 (High)</option>
+                    <option value="3">3 (Critical)</option>
+                  </select>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  icon={<IconPlus size={15} />}
+                  onClick={handleAddSkill}
+                  disabled={!currentSkillId}
+                >
+                  Add Requirement
+                </Button>
               </div>
-            ) : (
-              <p style={{ fontSize: "13px", color: "#888", fontStyle: "italic", margin: 0 }}>
-                No skills added yet. Add at least one skill above.
-              </p>
-            )}
-          </div>
 
-          {/* Publishing Option */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e8e8e6", paddingTop: "20px" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={form.status === "published"}
-                onChange={(e) => setForm({ ...form, status: e.target.checked ? "published" : "draft" })}
-              />
-              Publish immediately (visible to candidates on Open Jobs page)
-            </label>
+              {/* Selected Skills List */}
+              {selectedSkills.length === 0 ? (
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-faint)", margin: 0, fontStyle: "italic" }}>
+                  No skills attached yet. Click 'Add Requirement' above to attach at least one skill before publishing.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                  {selectedSkills.map((s) => (
+                    <div
+                      key={s.skill_id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "var(--space-3) var(--space-4)",
+                        borderRadius: "var(--radius-md)",
+                        backgroundColor: "var(--surface)",
+                        border: "1px solid var(--border-subtle)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                        <IconAward size={16} color="var(--accent)" />
+                        <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                          {s.skill_name}
+                        </strong>
+                        <Badge variant="accent">Min Score: {s.minimum_score}%</Badge>
+                        <Badge variant="neutral">Weight: &times;{s.importance_weight}</Badge>
+                      </div>
 
-            <div style={{ display: "flex", gap: "12px" }}>
-              <Link
-                to="/recruiter/jobs"
-                style={{
-                  padding: "10px 18px",
-                  background: "#fff",
-                  border: "1px solid #d4d4d4",
-                  borderRadius: "6px",
-                  color: "#555",
-                  textDecoration: "none",
-                  fontSize: "14px",
-                }}
-              >
-                Cancel
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkill(s.skill_id)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--color-danger)",
+                          cursor: "pointer",
+                          padding: "4px",
+                        }}
+                        aria-label="Remove skill requirement"
+                      >
+                        <IconTrash size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+            <CardFooter>
+              <Link to="/recruiter/jobs">
+                <Button variant="ghost" size="md">
+                  Cancel
+                </Button>
               </Link>
-              <button
-                type="submit"
-                disabled={submitting}
-                style={{
-                  padding: "10px 24px",
-                  background: "#1a5fa6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                }}
-              >
-                {submitting ? "Posting Job..." : form.status === "published" ? "Publish Job" : "Save as Draft"}
-              </button>
-            </div>
-          </div>
+              <Button type="submit" variant="primary" size="md" loading={submitting}>
+                {form.status === "published" ? "Publish Requisition" : "Save Draft"}
+              </Button>
+            </CardFooter>
+          </Card>
         </form>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
-

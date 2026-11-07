@@ -1,6 +1,8 @@
 """Skill assessments and verified results."""
 
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
 from backend.config import settings
@@ -99,10 +101,14 @@ def start_assessment(
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"You already have an open assessment for this skill (id {existing.id})",
-        )
+        if payload.force_restart or (existing.total_questions or 0) == 0:
+            db.delete(existing)
+            db.commit()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"You already have an open assessment for this skill (id {existing.id})",
+            )
 
     start_of_day = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     started_today = (
@@ -226,6 +232,49 @@ def get_questions(
         )
         for question in questions
     ]
+
+
+@router.get("/assessments/{assessment_id}/questions/{question_id}/audio")
+def get_question_audio(
+    assessment_id: int,
+    question_id: int,
+    current_user: User = Depends(require_roles(UserRole.job_seeker)),
+    db: Session = Depends(get_db),
+):
+    """Synthesize (or return cached) question audio WAV via MsingiAI TTS.
+    Serves spoken questions for anti-copying proctoring and accessibility.
+    """
+    assessment = _own_assessment(db, assessment_id, current_user)
+    question = (
+        db.query(AssessmentQuestion)
+        .filter(AssessmentQuestion.id == question_id, AssessmentQuestion.assessment_id == assessment.id)
+        .first()
+    )
+    if question is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
+
+    cache_dir = settings.voice_upload_path / f"assessment_{assessment.id}"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = cache_dir / f"q_{question.id}.wav"
+
+    if audio_path.is_file():
+        return FileResponse(audio_path, media_type="audio/wav", filename=f"question_{question.id}.wav")
+
+    if not settings.msingi_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MsingiAI is not configured. Set MSINGI_API_KEY in backend/.env.",
+        )
+
+    try:
+        from backend.services.msingi_service import MsingiError, create_speech
+
+        audio_bytes = create_speech(question.question_text)
+        audio_path.write_bytes(audio_bytes)
+    except MsingiError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    return FileResponse(audio_path, media_type="audio/wav", filename=f"question_{question.id}.wav")
 
 
 @router.post("/assessments/{assessment_id}/submit", response_model=AssessmentResult)

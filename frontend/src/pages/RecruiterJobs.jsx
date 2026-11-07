@@ -1,13 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import { Link, useNavigate } from "react-router-dom";
+import AppShell from "../components/layout/AppShell";
 import employersApi from "../api/employers";
 import jobsApi from "../api/jobs";
-import "../styles/recruiter-jobs.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import DataTable from "../components/ui/DataTable";
+import {
+  IconBriefcase,
+  IconSearch,
+  IconPlus,
+  IconRefreshCw,
+  IconCheck,
+  IconX,
+} from "../components/ui/Icons";
 
 const FILTERS = ["All", "published", "closed", "draft"];
 
 export default function RecruiterJobs() {
+  const navigate = useNavigate();
+
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -59,169 +74,209 @@ export default function RecruiterJobs() {
     }
   };
 
-  return (
-    <div className="ph-rj">
-      <Navbar />
-
-      <main className="ph-rj__main">
-        <div className="ph-rj__head">
+  const columns = useMemo(
+    () => [
+      {
+        key: "title",
+        label: "Position Title",
+        sortable: true,
+        render: (title, row) => (
           <div>
-            <h1 className="ph-rj__title">Posted Jobs</h1>
-            <p className="ph-rj__sub">
-              Manage your job openings and view candidate rankings based on verified abilities.
-            </p>
+            <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>{title}</strong>
+            <span style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+              {row.location || "Nairobi, Kenya"} &bull;{" "}
+              {row.employment_type?.replace("_", " ") || "Full time"}
+            </span>
           </div>
-          <Link className="ph-btn" to="/recruiter/jobs/new">
-            + Post New Job
-          </Link>
+        ),
+      },
+      {
+        key: "experience_level",
+        label: "Seniority",
+        render: (lvl) => (
+          <span style={{ fontSize: "var(--font-size-xs)", textTransform: "capitalize", color: "var(--text-muted)" }}>
+            {lvl || "Mid-level"}
+          </span>
+        ),
+      },
+      {
+        key: "skills",
+        label: "Required Skills",
+        render: (skillsList) => (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", maxWidth: "260px" }}>
+            {skillsList && skillsList.length > 0 ? (
+              skillsList.map((s) => (
+                <Badge key={s.id || s.skill_id} variant="neutral">
+                  {s.skill_name}
+                  {s.minimum_score > 0 && ` (≥${s.minimum_score}%)`}
+                </Badge>
+              ))
+            ) : (
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-faint)" }}>
+                No requirements set
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        label: "Status",
+        sortable: true,
+        render: (status) => (
+          <Badge variant={status === "published" ? "success" : "neutral"} dot>
+            {status}
+          </Badge>
+        ),
+      },
+      {
+        key: "actions",
+        label: "Actions",
+        align: "right",
+        render: (_, row) => (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)" }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/recruiter/jobs/${row.id}/candidates`)}
+            >
+              Candidates
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={togglingId === row.id}
+              onClick={() => handleToggleStatus(row)}
+            >
+              {row.status === "published" ? "Close" : "Publish"}
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [togglingId, navigate]
+  );
+
+  return (
+    <AppShell>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-semibold)",
+              letterSpacing: "var(--tracking-tighter)",
+              color: "var(--text)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Manage Job Requisitions
+          </h1>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: 0 }}>
+            Publish open opportunities, configure skill threshold requirements, and review verified
+            applicant matches.
+          </p>
         </div>
 
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
-            {error}
-          </div>
-        )}
+        <Link to="/recruiter/jobs/new">
+          <Button variant="primary" size="md" icon={<IconPlus size={16} />}>
+            Post New Job
+          </Button>
+        </Link>
+      </div>
 
-        <div className="ph-rj__controls">
-          <input
-            className="ph-rj__search"
-            type="search"
-            placeholder="Search jobs by title or location..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+      {error && (
+        <Alert variant="danger" title="Notice" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-6)" }}>
+          {error}
+        </Alert>
+      )}
 
-          <div className="ph-rj__filters">
-            {FILTERS.map((f) => (
+      {/* Filter toolbar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "var(--space-3)",
+          marginBottom: "var(--space-6)",
+        }}
+      >
+        {/* Status Filter Chips */}
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          {FILTERS.map((f) => {
+            const active = filter === f;
+            return (
               <button
                 key={f}
                 type="button"
-                className={
-                  "ph-rj__filter" + (filter === f ? " ph-rj__filter--active" : "")
-                }
                 onClick={() => setFilter(f)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: "var(--radius-pill)",
+                  fontSize: "var(--font-size-xs)",
+                  fontWeight: active ? "var(--font-weight-semibold)" : "var(--font-weight-medium)",
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  backgroundColor: active ? "var(--accent-subtle)" : "var(--surface)",
+                  color: active ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                }}
               >
-                {f === "published" ? "Open" : f.charAt(0).toUpperCase() + f.slice(1)}
+                {f}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "#666" }}>
-            <p>Loading your jobs...</p>
-          </div>
-        ) : visibleJobs.length === 0 ? (
-          <div className="ph-rj__card" style={{ textAlign: "center", padding: "48px 0" }}>
-            <p style={{ fontSize: "16px", color: "#666", margin: "0 0 12px" }}>
-              {query ? `No jobs found matching "${query}".` : "No jobs matching the selected filter."}
-            </p>
-            <Link
-              to="/recruiter/jobs/new"
-              style={{
-                display: "inline-block",
-                padding: "8px 16px",
-                background: "#1a5fa6",
-                color: "#fff",
-                borderRadius: "6px",
-                textDecoration: "none",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Post a Job Now
-            </Link>
-          </div>
-        ) : (
-          <div className="ph-rj__card">
-            <table className="ph-rj__table">
-              <thead>
-                <tr>
-                  <th>Job Title</th>
-                  <th>Location</th>
-                  <th>Type</th>
-                  <th>Required Skills</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleJobs.map((job) => {
-                  const isOpen = job.status === "published";
-                  return (
-                    <tr key={job.id}>
-                      <td>
-                        <strong>{job.title}</strong>
-                        <div style={{ fontSize: "12px", color: "#777", marginTop: "2px" }}>
-                          Posted {new Date(job.created_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td style={{ color: "#555" }}>{job.location || "Remote"}</td>
-                      <td style={{ textTransform: "capitalize", color: "#555" }}>
-                        {job.employment_type ? job.employment_type.replace("_", " ") : "Full time"}
-                      </td>
-                      <td>
-                        {job.skills && job.skills.length > 0 ? (
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                            {job.skills.map((s) => (
-                              <span
-                                key={s.id || s.skill_id}
-                                style={{
-                                  fontSize: "11px",
-                                  padding: "2px 6px",
-                                  background: "#f0f4f8",
-                                  color: "#1a5fa6",
-                                  borderRadius: "4px",
-                                }}
-                              >
-                                {s.skill_name}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: "#999", fontSize: "12px" }}>None</span>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          className={
-                            "ph-rj__badge" +
-                            (isOpen ? " ph-rj__badge--open" : " ph-rj__badge--closed")
-                          }
-                        >
-                          {isOpen ? "Open" : job.status}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
-                          <button
-                            type="button"
-                            className="ph-rj__btn ph-rj__btn--ghost"
-                            onClick={() => handleToggleStatus(job)}
-                            disabled={togglingId === job.id}
-                          >
-                            {togglingId === job.id
-                              ? "Updating..."
-                              : isOpen
-                              ? "Close job"
-                              : "Reopen"}
-                          </button>
-                          <Link
-                            className="ph-rj__btn"
-                            to={`/recruiter/jobs/${job.id}/candidates`}
-                          >
-                            Candidates →
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
-    </div>
+        {/* Search */}
+        <div style={{ display: "flex", gap: "var(--space-2)", width: "320px" }}>
+          <Input
+            type="search"
+            placeholder="Search by title, location..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            startIcon={<IconSearch size={15} />}
+            wrapperClassName="mb-0"
+            style={{ height: "34px" }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<IconRefreshCw size={14} />}
+            onClick={loadJobs}
+            loading={loading}
+          />
+        </div>
+      </div>
+
+      {/* Jobs Table */}
+      <Card>
+        <CardBody style={{ padding: 0 }}>
+          <DataTable
+            columns={columns}
+            data={visibleJobs}
+            loading={loading}
+            emptyTitle="No requisitions found"
+            emptyDescription={
+              query
+                ? `No positions matched "${query}".`
+                : "No job postings in this filter. Click 'Post New Job' to create one."
+            }
+            keyExtractor={(j) => j.id}
+          />
+        </CardBody>
+      </Card>
+    </AppShell>
   );
 }

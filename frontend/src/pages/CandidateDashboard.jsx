@@ -1,14 +1,36 @@
 import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import AppShell from "../components/layout/AppShell";
 import { useAuth } from "../context/AuthContext";
 import cvApi from "../api/cv";
 import skillsApi from "../api/skills";
-import assessmentsApi from "../api/assessments";
 import applicationsApi from "../api/applications";
 import voiceInterviewsApi from "../api/voiceInterviews";
 import usersApi from "../api/users";
-import "../styles/dashboard.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Select from "../components/ui/Select";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import StatTile from "../components/ui/StatTile";
+import Skeleton from "../components/ui/Skeleton";
+import EmptyState from "../components/ui/EmptyState";
+import {
+  IconFileText,
+  IconUploadCloud,
+  IconSparkles,
+  IconAward,
+  IconBriefcase,
+  IconMic,
+  IconCheckCircle,
+  IconAlertCircle,
+  IconPlus,
+  IconExternalLink,
+  IconTrash,
+  IconArrowRight,
+  IconRefreshCw,
+  IconShield,
+} from "../components/ui/Icons";
 
 export default function CandidateDashboard() {
   const { user } = useAuth();
@@ -28,10 +50,12 @@ export default function CandidateDashboard() {
   const [candidateSkills, setCandidateSkills] = useState([]);
   const [allSkills, setAllSkills] = useState([]);
   const [selectedSkillToAdd, setSelectedSkillToAdd] = useState("");
+  const [addingSkill, setAddingSkill] = useState(false);
 
   const [applications, setApplications] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [isPublicProfile, setIsPublicProfile] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -53,16 +77,16 @@ export default function CandidateDashboard() {
         setActiveCv(null);
       }
 
-      // 2. Load candidate skills & available skills
+      // 2. Load candidate skills & available catalog
       const [mySkillsData, availableSkillsData] = await Promise.all([
-        skillsApi.getMySkills(),
-        skillsApi.getSkills(),
+        skillsApi.getMySkills().catch(() => []),
+        skillsApi.getSkills().catch(() => []),
       ]);
       setCandidateSkills(mySkillsData || []);
       setAllSkills(availableSkillsData || []);
 
       // 3. Load applications
-      const apps = await applicationsApi.getMyApplications();
+      const apps = await applicationsApi.getMyApplications().catch(() => ({ items: [] }));
       setApplications(apps.items || []);
 
       // 4. Load interviews
@@ -102,44 +126,32 @@ export default function CandidateDashboard() {
     setSuccessMsg("");
 
     try {
-      const uploaded = await cvApi.uploadCv(file);
-      setActiveCv(uploaded);
-      setSuccessMsg("CV uploaded successfully! Starting AI skill extraction...");
-
-      // Automatically trigger AI analysis
-      try {
-        setAnalyzingCv(true);
-        const analysis = await cvApi.analyzeCv(uploaded.id);
-        setCvAnalysis(analysis);
-        setActiveCv((prev) => (prev ? { ...prev, analysis_status: "completed" } : null));
-        setSuccessMsg("CV analyzed and verified by Gemini AI! Extracted skills have been updated.");
-        // Refresh skills list
-        const refreshedSkills = await skillsApi.getMySkills();
-        setCandidateSkills(refreshedSkills || []);
-      } catch (aiErr) {
-        setSuccessMsg("CV uploaded. Click 'Run AI Analysis' to extract skills.");
-      } finally {
-        setAnalyzingCv(false);
-      }
+      const formData = new FormData();
+      formData.append("file", file);
+      const newCv = await cvApi.uploadCv(formData);
+      setActiveCv(newCv);
+      setSuccessMsg("CV uploaded successfully.");
     } catch (err) {
       setError(err.message || "Failed to upload CV.");
     } finally {
       setUploadingCv(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleTriggerAnalysis = async () => {
-    if (!activeCv) return;
+  const handleAnalyzeCv = async () => {
+    if (!activeCv?.id) return;
     setAnalyzingCv(true);
     setError("");
     setSuccessMsg("");
+
     try {
       const analysis = await cvApi.analyzeCv(activeCv.id);
       setCvAnalysis(analysis);
-      setActiveCv((prev) => (prev ? { ...prev, analysis_status: "completed" } : null));
-      setSuccessMsg("AI analysis complete! Skills and credentials extracted.");
-      const refreshedSkills = await skillsApi.getMySkills();
-      setCandidateSkills(refreshedSkills || []);
+      setSuccessMsg("CV analyzed with Gemini AI. Review extracted skills below.");
+      // Reload skills in case new skills were extracted
+      const mySkillsData = await skillsApi.getMySkills();
+      setCandidateSkills(mySkillsData || []);
     } catch (err) {
       setError(err.message || "Failed to analyze CV.");
     } finally {
@@ -147,492 +159,644 @@ export default function CandidateDashboard() {
     }
   };
 
-  const handleTogglePublic = async () => {
-    try {
-      const next = !isPublicProfile;
-      await usersApi.updateCandidateProfile({ is_public: next });
-      setIsPublicProfile(next);
-      setSuccessMsg(`Your profile is now ${next ? "Public (discoverable by recruiters)" : "Private"}.`);
-    } catch (err) {
-      setError(err.message || "Failed to update profile visibility.");
-    }
-  };
-
   const handleAddSkill = async () => {
     if (!selectedSkillToAdd) return;
+    setAddingSkill(true);
+    setError("");
+
     try {
-      await skillsApi.addMySkill({ skill_id: parseInt(selectedSkillToAdd, 10) });
+      await skillsApi.addCandidateSkill({ skill_id: parseInt(selectedSkillToAdd, 10) });
+      const updated = await skillsApi.getMySkills();
+      setCandidateSkills(updated || []);
       setSelectedSkillToAdd("");
-      const refreshedSkills = await skillsApi.getMySkills();
-      setCandidateSkills(refreshedSkills || []);
-      setSuccessMsg("Skill added to profile! Take the assessment to earn verification.");
+      setSuccessMsg("Skill added to profile. Take the assessment to verify it!");
     } catch (err) {
       setError(err.message || "Failed to add skill.");
+    } finally {
+      setAddingSkill(false);
     }
   };
 
-  const handleRemoveSkill = async (skillId) => {
+  const handleTogglePublic = async () => {
+    setSavingVisibility(true);
+    setError("");
+    const nextVal = !isPublicProfile;
+
     try {
-      await skillsApi.removeMySkill(skillId);
-      setCandidateSkills((list) => list.filter((s) => s.skill_id !== skillId));
-      setSuccessMsg("Skill removed from profile.");
+      await usersApi.updateProfile({ is_public: nextVal });
+      setIsPublicProfile(nextVal);
+      setSuccessMsg(`Profile is now ${nextVal ? "publicly searchable by employers" : "private"}.`);
     } catch (err) {
-      setError(err.message || "Failed to remove skill.");
+      setError(err.message || "Failed to update profile visibility.");
+    } finally {
+      setSavingVisibility(false);
     }
   };
 
-  const handleStartInterview = async (applicationId) => {
-    try {
-      const interview = await voiceInterviewsApi.startInterview(applicationId);
-      navigate(`/interview/${interview.id}`);
-    } catch (err) {
-      setError(err.message || "Unable to start voice interview.");
-    }
-  };
-
-  const candidateSkillIds = new Set(candidateSkills.map((s) => s.skill_id));
-  const unaddedSkills = allSkills.filter((s) => !candidateSkillIds.has(s.id));
+  // Metrics computation
+  const verifiedSkillsCount = candidateSkills.filter((s) => s.is_verified).length;
+  const verifiedScores = candidateSkills
+    .filter((s) => s.is_verified && s.verified_score)
+    .map((s) => s.verified_score);
+  const avgScore =
+    verifiedScores.length > 0
+      ? Math.round(verifiedScores.reduce((a, b) => a + b, 0) / verifiedScores.length)
+      : null;
 
   return (
-    <div className="ph-dash">
-      <Navbar />
-
-      <main className="ph-dash__main">
-        {/* Header Profile Summary */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px" }}>
-          <div>
-            <h1 className="ph-dash__title">Candidate Dashboard</h1>
-            <p className="ph-dash__sub">
-              Welcome back, <strong>{user?.full_name}</strong> · {user?.email}
-            </p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#fff", padding: "8px 16px", borderRadius: "8px", border: "1px solid #e8e8e6" }}>
-            <span style={{ fontSize: "13px", color: "#555" }}>Profile Visibility:</span>
-            <button
-              type="button"
-              onClick={handleTogglePublic}
+    <AppShell>
+      {/* Dashboard Top Header & Visibility Toggle */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <h1
               style={{
-                background: isPublicProfile ? "#e3f1d9" : "#f0f0f0",
-                color: isPublicProfile ? "#2c5a14" : "#555",
-                border: "none",
-                padding: "4px 10px",
-                borderRadius: "12px",
-                fontSize: "12px",
-                fontWeight: "600",
-                cursor: "pointer",
+                fontSize: "var(--font-size-3xl)",
+                fontWeight: "var(--font-weight-semibold)",
+                color: "var(--text)",
+                letterSpacing: "var(--tracking-tighter)",
+                margin: 0,
               }}
             >
-              {isPublicProfile ? "Public to Employers" : "Private"}
-            </button>
+              Candidate Command Center
+            </h1>
+            <Badge variant="accent">Job Seeker</Badge>
           </div>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: 0 }}>
+            Welcome back, {user?.full_name || "Candidate"}. Manage your CV, verified technical scores,
+            and employer matches.
+          </p>
         </div>
 
-        {/* Alerts */}
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
-            {error}
-          </div>
-        )}
-        {successMsg && (
-          <div style={{ padding: "12px 16px", background: "#edf7ed", border: "1px solid #c8e6c9", borderRadius: "8px", color: "#1e4620", marginBottom: "20px", fontSize: "14px" }}>
-            {successMsg}
-          </div>
-        )}
+        {/* Visibility Switch & Action Buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <button
+            type="button"
+            onClick={handleTogglePublic}
+            disabled={savingVisibility}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "6px 12px",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: isPublicProfile ? "var(--color-success-bg)" : "var(--surface-sunken)",
+              border: `1px solid ${isPublicProfile ? "var(--color-success-border)" : "var(--border)"}`,
+              color: isPublicProfile ? "var(--color-success)" : "var(--text-muted)",
+              fontSize: "var(--font-size-xs)",
+              fontWeight: "var(--font-weight-medium)",
+              cursor: "pointer",
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: isPublicProfile ? "var(--color-success)" : "var(--text-faint)",
+              }}
+            />
+            {isPublicProfile ? "Public to Employers" : "Private Profile"}
+          </button>
 
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>
-            <p>Loading your skills, tests, and applications...</p>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<IconRefreshCw size={14} />}
+            onClick={loadAllData}
+            loading={loading}
+          >
+            Sync
+          </Button>
+        </div>
+      </div>
 
-            {/* 1. CV & AI Analysis Card */}
-            <div className="ph-table-card" style={{ padding: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <h2 style={{ fontSize: "18px", margin: 0, fontWeight: "600" }}>Your Curriculum Vitae (CV)</h2>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingCv}
-                    style={{
-                      background: "#1a5fa6",
-                      color: "#fff",
-                      border: "none",
-                      padding: "8px 16px",
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {uploadingCv ? "Uploading..." : activeCv ? "Replace CV" : "Upload CV"}
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.docx,.doc,application/pdf"
-                    style={{ display: "none" }}
-                    onChange={handleCvUpload}
-                  />
-                </div>
+      {/* Messages */}
+      {error && (
+        <Alert variant="danger" title="Notice" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-6)" }}>
+          {error}
+        </Alert>
+      )}
+      {successMsg && (
+        <Alert variant="success" onDismiss={() => setSuccessMsg("")} style={{ marginBottom: "var(--space-6)" }}>
+          {successMsg}
+        </Alert>
+      )}
+
+      {/* Stat Tiles Strip */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <StatTile
+          label="Verified Skills"
+          value={loading ? "..." : `${verifiedSkillsCount}/${candidateSkills.length}`}
+          icon={<IconAward size={20} />}
+          subtext={
+            verifiedSkillsCount > 0
+              ? `${candidateSkills.length - verifiedSkillsCount} pending assessment`
+              : "Take test to verify"
+          }
+        />
+        <StatTile
+          label="Average Score"
+          value={loading ? "..." : avgScore ? `${avgScore}%` : "—"}
+          icon={<IconShield size={20} />}
+          trend={avgScore && avgScore >= 75 ? "Top 15%" : null}
+          trendType={avgScore && avgScore >= 75 ? "positive" : "neutral"}
+          subtext="Objective technical marks"
+        />
+        <StatTile
+          label="Active Applications"
+          value={loading ? "..." : applications.length}
+          icon={<IconBriefcase size={20} />}
+          subtext={
+            applications.length > 0 ? "Under employer review" : "Explore open jobs"
+          }
+        />
+        <StatTile
+          label="AI Voice Interviews"
+          value={loading ? "..." : interviews.length}
+          icon={<IconMic size={20} />}
+          subtext="Verifiable audio evaluations"
+        />
+      </div>
+
+      {/* Main Grid: 2-Column Layout */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: "var(--space-6)",
+        }}
+      >
+        {/* Row 1: CV Management & Analysis Card */}
+        <Card>
+          <CardHeader>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <span
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--accent-subtle)",
+                  color: "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <IconFileText size={18} />
+              </span>
+              <div>
+                <CardTitle>Curriculum Vitae & Parsing</CardTitle>
+                <CardDescription>
+                  Upload your CV to extract skill claims and automatically match against open roles.
+                </CardDescription>
               </div>
-
-              {activeCv ? (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f7f6f4", padding: "12px 16px", borderRadius: "8px", marginBottom: "16px" }}>
-                    <div>
-                      <p style={{ margin: 0, fontWeight: "600", fontSize: "14px" }}>{activeCv.file_name}</p>
-                      <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#777" }}>
-                        Uploaded {new Date(activeCv.uploaded_at).toLocaleDateString()} · Status: <span style={{ textTransform: "capitalize", fontWeight: "500" }}>{activeCv.analysis_status}</span>
-                      </p>
-                    </div>
-                    {activeCv.analysis_status !== "completed" && (
-                      <button
-                        type="button"
-                        onClick={handleTriggerAnalysis}
-                        disabled={analyzingCv}
-                        style={{
-                          background: "#fff",
-                          border: "1px solid #1a5fa6",
-                          color: "#1a5fa6",
-                          padding: "6px 12px",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {analyzingCv ? "Analyzing..." : "Run AI Analysis"}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* AI Analysis Summary */}
-                  {cvAnalysis && (
-                    <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "16px", marginTop: "12px" }}>
-                      <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", color: "#1a5fa6", margin: "0 0 8px" }}>
-                        Gemini AI Extracted Insights
-                      </p>
-                      {cvAnalysis.experience_summary && (
-                        <p style={{ fontSize: "13px", color: "#444", marginBottom: "8px" }}>
-                          <strong>Experience:</strong> {cvAnalysis.experience_summary}
-                        </p>
-                      )}
-                      {cvAnalysis.education && (
-                        <p style={{ fontSize: "13px", color: "#444", marginBottom: "8px" }}>
-                          <strong>Education:</strong> {cvAnalysis.education}
-                        </p>
-                      )}
-                      {cvAnalysis.skills && cvAnalysis.skills.length > 0 && (
-                        <div style={{ marginTop: "12px" }}>
-                          <strong style={{ fontSize: "13px", color: "#444", display: "block", marginBottom: "8px" }}>
-                            Skills detected in CV:
-                          </strong>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                            {cvAnalysis.skills.map((s, idx) => {
-                              const skillName = typeof s === "string" ? s : s.name;
-                              return (
-                                <span
-                                  key={idx}
-                                  style={{
-                                    padding: "3px 10px",
-                                    background: "#eef4fa",
-                                    color: "#1a5fa6",
-                                    borderRadius: "12px",
-                                    fontSize: "12px",
-                                    fontWeight: "500",
-                                  }}
-                                >
-                                  {skillName}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ textAlign: "center", padding: "24px", color: "#777" }}>
-                  <p style={{ margin: "0 0 8px" }}>No CV uploaded yet.</p>
-                  <p style={{ margin: 0, fontSize: "13px" }}>
-                    Upload your CV so Google Gemini can extract your skills and match you to jobs.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* 2. Skills & Verifications Card */}
-            <div className="ph-table-card" style={{ padding: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-                <div>
-                  <h2 style={{ fontSize: "18px", margin: 0, fontWeight: "600" }}>Verified Skills & Certifications</h2>
-                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#666" }}>
-                    Complete AI assessments to verify your skills and rank higher with employers.
-                  </p>
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.doc"
+                style={{ display: "none" }}
+                onChange={handleCvUpload}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<IconUploadCloud size={14} />}
+                onClick={() => fileInputRef.current?.click()}
+                loading={uploadingCv}
+              >
+                {activeCv ? "Replace CV" : "Upload CV"}
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardBody style={{ padding: "var(--space-6)" }}>
+            {activeCv ? (
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "var(--space-4)",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: "var(--surface-raised)",
+                    border: "1px solid var(--border-subtle)",
+                    marginBottom: "var(--space-4)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                    <IconFileText size={24} color="var(--accent)" />
+                    <div>
+                      <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                        {activeCv.filename || "Curriculum_Vitae.pdf"}
+                      </strong>
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "var(--font-size-xs)",
+                          color: "var(--text-muted)",
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        Uploaded on{" "}
+                        {activeCv.created_at
+                          ? new Date(activeCv.created_at).toLocaleDateString()
+                          : "Recently"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<IconSparkles size={14} />}
+                    onClick={handleAnalyzeCv}
+                    loading={analyzingCv}
+                  >
+                    {cvAnalysis ? "Re-analyze with AI" : "Analyze CV with AI"}
+                  </Button>
                 </div>
 
-                {/* Add skill dropdown */}
-                {unaddedSkills.length > 0 && (
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <select
-                      value={selectedSkillToAdd}
-                      onChange={(e) => setSelectedSkillToAdd(e.target.value)}
-                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "13px" }}
-                    >
-                      <option value="">Select a skill to add...</option>
-                      {unaddedSkills.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.category})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleAddSkill}
-                      disabled={!selectedSkillToAdd}
+                {/* CV Analysis Output if present */}
+                {cvAnalysis && (
+                  <div
+                    style={{
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--accent-subtle)",
+                      border: "1px solid var(--accent-subtle-border)",
+                    }}
+                  >
+                    <div
                       style={{
-                        background: "#1a5fa6",
-                        color: "#fff",
-                        border: "none",
-                        padding: "6px 12px",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "var(--font-size-xs)",
+                        fontWeight: "var(--font-weight-semibold)",
+                        color: "var(--accent)",
+                        marginBottom: "var(--space-2)",
+                        textTransform: "uppercase",
+                        letterSpacing: "var(--tracking-wide)",
                       }}
                     >
-                      Add
-                    </button>
+                      <IconSparkles size={14} /> AI Analysis Summary
+                    </div>
+                    {cvAnalysis.summary && (
+                      <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text)", marginBottom: "var(--space-3)" }}>
+                        {cvAnalysis.summary}
+                      </p>
+                    )}
+                    {cvAnalysis.extracted_skills && cvAnalysis.extracted_skills.length > 0 && (
+                      <div>
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                          Identified Competencies:
+                        </span>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {cvAnalysis.extracted_skills.map((s, idx) => (
+                            <Badge key={idx} variant="accent">
+                              {typeof s === "string" ? s : s.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+            ) : (
+              <EmptyState
+                icon={<IconUploadCloud size={24} />}
+                title="No CV uploaded yet"
+                description="Upload your PDF or Word document to unlock verified assessments and AI job matching."
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<IconUploadCloud size={14} />}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Upload CV Now
+                  </Button>
+                }
+              />
+            )}
+          </CardBody>
+        </Card>
 
-              {candidateSkills.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "24px", color: "#777" }}>
-                  <p>You haven't added any skills to your profile yet.</p>
-                  <p style={{ fontSize: "13px" }}>Select a skill above or upload your CV to automatically extract skills.</p>
-                </div>
-              ) : (
-                <table className="ph-table">
+        {/* Row 2: Candidate Skills & Technical Verification */}
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Skills Verification Matrix</CardTitle>
+              <CardDescription>
+                Take standardized technical assessments to verify your skills with tamper-proof scores.
+              </CardDescription>
+            </div>
+
+            {/* Quick add skill control */}
+            <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+              <select
+                className="tb-select"
+                style={{ height: "32px", fontSize: "var(--font-size-xs)", padding: "0 var(--space-6) 0 var(--space-2)" }}
+                value={selectedSkillToAdd}
+                onChange={(e) => setSelectedSkillToAdd(e.target.value)}
+              >
+                <option value="">Select skill to add...</option>
+                {allSkills
+                  .filter((as) => !candidateSkills.some((cs) => cs.skill_id === as.id || cs.id === as.id))
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.category || "General"})
+                    </option>
+                  ))}
+              </select>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<IconPlus size={14} />}
+                onClick={handleAddSkill}
+                disabled={!selectedSkillToAdd}
+                loading={addingSkill}
+              >
+                Add
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardBody style={{ padding: 0 }}>
+            {candidateSkills.length === 0 ? (
+              <div style={{ padding: "var(--space-6)" }}>
+                <EmptyState
+                  icon={<IconAward size={24} />}
+                  title="No skills added yet"
+                  description="Add technologies you work with from the catalog above to begin technical verification."
+                />
+              </div>
+            ) : (
+              <div className="tb-table-container" style={{ border: "none", borderRadius: 0 }}>
+                <table className="tb-table">
                   <thead>
                     <tr>
-                      <th>Skill</th>
+                      <th>Skill / Technology</th>
                       <th>Category</th>
                       <th>Status</th>
-                      <th>Verified Score</th>
-                      <th>Level</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
+                      <th className="num-col">Score</th>
+                      <th style={{ textAlign: "right" }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {candidateSkills.map((skill) => (
-                      <tr key={skill.id || skill.skill_id}>
-                        <td>
-                          <strong>{skill.skill_name}</strong>
-                        </td>
-                        <td>{skill.category || "General"}</td>
-                        <td>
-                          {skill.is_verified ? (
-                            <span style={{ background: "#e3f1d9", color: "#2c5a14", padding: "3px 8px", borderRadius: "10px", fontSize: "12px", fontWeight: "600" }}>
-                              Verified
-                            </span>
-                          ) : (
-                            <span style={{ background: "#f5f5f5", color: "#666", padding: "3px 8px", borderRadius: "10px", fontSize: "12px" }}>
-                              Unverified
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          {skill.verification_score != null ? `${Math.round(skill.verification_score)}%` : "—"}
-                        </td>
-                        <td>
-                          {skill.verification_level ? (
-                            <span style={{ fontWeight: "600", color: "#1a5fa6" }}>
-                              {skill.verification_level}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <Link
-                            to={`/assessments/${skill.skill_id}`}
-                            style={{
-                              display: "inline-block",
-                              background: skill.is_verified ? "#f0f4f8" : "#1a5fa6",
-                              color: skill.is_verified ? "#1a5fa6" : "#fff",
-                              padding: "4px 10px",
-                              borderRadius: "4px",
-                              fontSize: "12px",
-                              textDecoration: "none",
-                              fontWeight: "500",
-                              marginRight: "8px",
-                            }}
-                          >
-                            {skill.is_verified ? "Retake Test" : "Take Assessment"}
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSkill(skill.skill_id)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "#888",
-                              cursor: "pointer",
-                              fontSize: "12px",
-                              textDecoration: "underline",
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                    {candidateSkills.map((sk) => {
+                      const skillName = sk.skill_name || sk.name || "Skill";
+                      const isVerified = !!sk.is_verified;
+                      const score = sk.verified_score;
 
-            {/* 3. My Applications Card */}
-            <div className="ph-table-card" style={{ padding: "24px" }}>
-              <h2 style={{ fontSize: "18px", margin: "0 0 16px", fontWeight: "600" }}>Your Job Applications</h2>
-
-              {applications.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "24px", color: "#777" }}>
-                  <p>You haven't submitted any job applications yet.</p>
-                  <Link
-                    to="/"
-                    style={{
-                      display: "inline-block",
-                      marginTop: "8px",
-                      color: "#1a5fa6",
-                      fontWeight: "500",
-                      fontSize: "14px",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Browse Open Jobs →
-                  </Link>
-                </div>
-              ) : (
-                <table className="ph-table">
-                  <thead>
-                    <tr>
-                      <th>Job Title</th>
-                      <th>Applied Date</th>
-                      <th>Status</th>
-                      <th>Match Score</th>
-                      <th style={{ textAlign: "right" }}>Next Step</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applications.map((app) => (
-                      <tr key={app.id}>
-                        <td>
-                          <strong>{app.job_title}</strong>
-                        </td>
-                        <td>{new Date(app.applied_at).toLocaleDateString()}</td>
-                        <td>
-                          <span
-                            style={{
-                              textTransform: "capitalize",
-                              padding: "3px 8px",
-                              borderRadius: "10px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              background:
-                                app.application_status === "shortlisted" || app.application_status === "accepted"
-                                  ? "#e3f1d9"
-                                  : app.application_status === "rejected"
-                                  ? "#fee4e2"
-                                  : "#eef4fa",
-                              color:
-                                app.application_status === "shortlisted" || app.application_status === "accepted"
-                                  ? "#2c5a14"
-                                  : app.application_status === "rejected"
-                                  ? "#b42318"
-                                  : "#154f8c",
-                            }}
-                          >
-                            {app.application_status}
-                          </span>
-                        </td>
-                        <td>
-                          {app.match_score != null ? `${Math.round(app.match_score)}%` : "—"}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleStartInterview(app.id)}
-                            style={{
-                              background: "#1a5fa6",
-                              color: "#fff",
-                              border: "none",
-                              padding: "4px 10px",
-                              borderRadius: "4px",
-                              fontSize: "12px",
-                              cursor: "pointer",
-                              fontWeight: "500",
-                            }}
-                          >
-                            Voice Interview
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* 4. Voice Interviews Card */}
-            {interviews.length > 0 && (
-              <div className="ph-table-card" style={{ padding: "24px" }}>
-                <h2 style={{ fontSize: "18px", margin: "0 0 16px", fontWeight: "600" }}>AI Voice Interviews</h2>
-                <table className="ph-table">
-                  <thead>
-                    <tr>
-                      <th>Interview ID</th>
-                      <th>Status</th>
-                      <th>Overall Score</th>
-                      <th>Tech Score</th>
-                      <th>Comm Score</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {interviews.map((iv) => (
-                      <tr key={iv.id}>
-                        <td>#{iv.id}</td>
-                        <td style={{ textTransform: "capitalize" }}>{iv.status}</td>
-                        <td><strong>{iv.overall_score != null ? `${Math.round(iv.overall_score)}%` : "In Progress"}</strong></td>
-                        <td>{iv.technical_score != null ? `${Math.round(iv.technical_score)}%` : "—"}</td>
-                        <td>{iv.communication_score != null ? `${Math.round(iv.communication_score)}%` : "—"}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <Link
-                            to={`/interview/${iv.id}`}
-                            style={{
-                              color: "#1a5fa6",
-                              fontSize: "13px",
-                              fontWeight: "500",
-                              textDecoration: "none",
-                            }}
-                          >
-                            {iv.status === "completed" ? "Review Transcript" : "Resume Interview →"}
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
+                      return (
+                        <tr key={sk.id || sk.skill_id}>
+                          <td>
+                            <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                              {skillName}
+                            </strong>
+                          </td>
+                          <td style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>
+                            {sk.category || "Development"}
+                          </td>
+                          <td>
+                            {isVerified ? (
+                              <Badge variant="success" dot>
+                                Verified
+                              </Badge>
+                            ) : (
+                              <Badge variant="warning" dot>
+                                Unverified
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="num-col">
+                            {score ? (
+                              <span style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--accent)" }}>
+                                {score}%
+                              </span>
+                            ) : (
+                              <span style={{ color: "var(--text-faint)" }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <Button
+                              variant={isVerified ? "ghost" : "primary"}
+                              size="sm"
+                              onClick={() => navigate(`/assessments/${sk.skill_id || sk.id}`)}
+                            >
+                              {isVerified ? "Retake" : "Take Assessment"}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
+          </CardBody>
+        </Card>
 
-          </div>
-        )}
-      </main>
-    </div>
+        {/* Row 3: Two Sub-Cards (Applications & Voice Interviews) */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+            gap: "var(--space-6)",
+          }}
+        >
+          {/* Applications Tracking Card */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Job Applications</CardTitle>
+                <CardDescription>Track status and employer match scores.</CardDescription>
+              </div>
+              <Link to="/jobs">
+                <Button variant="ghost" size="sm" icon={<IconExternalLink size={13} />}>
+                  Browse Jobs
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardBody style={{ padding: 0 }}>
+              {applications.length === 0 ? (
+                <div style={{ padding: "var(--space-6)" }}>
+                  <EmptyState
+                    icon={<IconBriefcase size={22} />}
+                    title="No active applications"
+                    description="You haven't submitted any job applications yet."
+                    action={
+                      <Link to="/jobs">
+                        <Button variant="secondary" size="sm">
+                          Explore Open Roles
+                        </Button>
+                      </Link>
+                    }
+                  />
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {applications.map((app) => (
+                    <div
+                      key={app.id}
+                      style={{
+                        padding: "var(--space-4) var(--space-6)",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "var(--space-3)",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)", display: "block" }}>
+                          {app.job_title || "Software Engineering Role"}
+                        </strong>
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                          {app.company_name || "Employer"} &bull;{" "}
+                          {app.created_at ? new Date(app.created_at).toLocaleDateString() : "Recent"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                        {app.fit_score && (
+                          <span
+                            style={{
+                              fontSize: "var(--font-size-xs)",
+                              fontFamily: "var(--font-mono)",
+                              color: "var(--accent)",
+                              fontWeight: "var(--font-weight-semibold)",
+                            }}
+                          >
+                            Fit {app.fit_score}%
+                          </span>
+                        )}
+                        <Badge
+                          variant={
+                            app.status === "shortlisted"
+                              ? "success"
+                              : app.status === "rejected"
+                              ? "danger"
+                              : "neutral"
+                          }
+                          style={{ textTransform: "capitalize" }}
+                        >
+                          {app.status || "Submitted"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* AI Voice Interviews Card */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>AI Voice Interviews</CardTitle>
+                <CardDescription>Conversational technical reasoning evaluations.</CardDescription>
+              </div>
+              <Link to="/interview">
+                <Button variant="primary" size="sm" icon={<IconMic size={14} />}>
+                  Start Interview
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardBody style={{ padding: 0 }}>
+              {interviews.length === 0 ? (
+                <div style={{ padding: "var(--space-6)" }}>
+                  <EmptyState
+                    icon={<IconMic size={22} />}
+                    title="No interviews completed yet"
+                    description="Take an interactive conversational AI interview to showcase your design choices and reasoning."
+                    action={
+                      <Link to="/interview">
+                        <Button variant="secondary" size="sm">
+                          Begin AI Voice Session
+                        </Button>
+                      </Link>
+                    }
+                  />
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {interviews.map((iv) => (
+                    <div
+                      key={iv.id}
+                      style={{
+                        padding: "var(--space-4) var(--space-6)",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "var(--space-3)",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)", display: "block" }}>
+                          Interview #{iv.id}
+                        </strong>
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                          {iv.created_at ? new Date(iv.created_at).toLocaleDateString() : "Recent"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                        <Badge
+                          variant={
+                            iv.status === "completed"
+                              ? "success"
+                              : iv.status === "in_progress"
+                              ? "accent"
+                              : "warning"
+                          }
+                        >
+                          {iv.status?.replace("_", " ") || "Pending"}
+                        </Badge>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            navigate(iv.status === "completed" ? "/interview/results" : `/interview/${iv.id}`)
+                          }
+                        >
+                          {iv.status === "completed" ? "Results" : "Continue"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      </div>
+    </AppShell>
   );
 }
-

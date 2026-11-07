@@ -1,10 +1,26 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import AppShell from "../components/layout/AppShell";
 import { useAuth } from "../context/AuthContext";
 import employersApi from "../api/employers";
 import applicationsApi from "../api/applications";
-import "../styles/recruiter-home.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import StatTile from "../components/ui/StatTile";
+import DataTable from "../components/ui/DataTable";
+import Skeleton from "../components/ui/Skeleton";
+import {
+  IconBuilding,
+  IconBriefcase,
+  IconUser,
+  IconPlus,
+  IconArrowRight,
+  IconCheckCircle,
+  IconClock,
+} from "../components/ui/Icons";
 
 export default function RecruiterHome() {
   const { user } = useAuth();
@@ -16,7 +32,6 @@ export default function RecruiterHome() {
   const [allApplications, setAllApplications] = useState([]);
   const [error, setError] = useState("");
 
-  // Profile modal state if company name is missing
   const [companyName, setCompanyName] = useState("");
   const [industry, setIndustry] = useState("");
   const [updatingProfile, setUpdatingProfile] = useState(false);
@@ -39,7 +54,6 @@ export default function RecruiterHome() {
       const jobList = jobsData.items || [];
       setJobs(jobList);
 
-      // Load applications for these jobs
       const appsPromises = jobList.map((j) =>
         applicationsApi.getJobApplications(j.id).catch(() => ({ items: [] }))
       );
@@ -92,187 +106,209 @@ export default function RecruiterHome() {
     };
   }, [jobs, allApplications]);
 
-  return (
-    <div className="ph-home">
-      <Navbar />
-
-      <main className="ph-home__main">
-        {/* Recruiter Header */}
-        <div className="ph-home__head">
+  const jobColumns = useMemo(
+    () => [
+      {
+        key: "title",
+        label: "Job Requisition",
+        sortable: true,
+        render: (title, row) => (
           <div>
-            <h1 className="ph-home__title">
-              Welcome back, {user?.full_name || "Recruiter"}
-            </h1>
-            <p className="ph-home__sub">
-              {profile?.company_name ? (
-                <span>
-                  Hiring for <strong>{profile.company_name}</strong> {profile.industry ? `(${profile.industry})` : ""}
-                </span>
-              ) : (
-                "Here is where your skill-verified hiring stands today."
-              )}
-            </p>
+            <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>{title}</strong>
+            <span style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+              {row.location || "Nairobi, Kenya"} &bull;{" "}
+              {row.employment_type?.replace("_", " ") || "Full time"}
+            </span>
           </div>
-          <Link className="ph-btn" to="/recruiter/jobs/new">
-            + Post New Job
-          </Link>
+        ),
+      },
+      {
+        key: "status",
+        label: "Status",
+        render: (status) => (
+          <Badge variant={status === "published" ? "success" : "neutral"} dot>
+            {status}
+          </Badge>
+        ),
+      },
+      {
+        key: "applicants_count",
+        label: "Applicants",
+        numeric: true,
+        render: (_, row) => {
+          const count = allApplications.filter((a) => a.job_id === row.id).length;
+          return <span className="tabular-nums">{count} applicants</span>;
+        },
+      },
+      {
+        key: "actions",
+        label: "Evaluation",
+        align: "right",
+        render: (_, row) => (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate(`/recruiter/jobs/${row.id}/candidates`)}
+          >
+            Review Candidates
+          </Button>
+        ),
+      },
+    ],
+    [allApplications, navigate]
+  );
+
+  return (
+    <AppShell>
+      {/* Recruiter Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <h1
+              style={{
+                fontSize: "var(--font-size-3xl)",
+                fontWeight: "var(--font-weight-semibold)",
+                letterSpacing: "var(--tracking-tighter)",
+                color: "var(--text)",
+                margin: 0,
+              }}
+            >
+              Employer Dashboard
+            </h1>
+            <Badge variant="accent">Employer</Badge>
+          </div>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: 0 }}>
+            {profile?.company_name ? (
+              <span>
+                Hiring organization: <strong>{profile.company_name}</strong>{" "}
+                {profile.industry ? `(${profile.industry})` : ""}
+              </span>
+            ) : (
+              "Overview of your active technical job requisitions and candidate verification status."
+            )}
+          </p>
         </div>
 
-        {/* Company Profile Setup Warning */}
-        {profile && !profile.company_name && (
-          <div style={{ background: "#fff", border: "1px solid #ffd591", borderRadius: "10px", padding: "20px", marginBottom: "24px" }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#d46b08" }}>Set Your Company Name</h3>
-            <p style={{ margin: "0 0 14px", fontSize: "14px", color: "#666" }}>
-              Before publishing job postings, please provide your organization name.
+        <Link to="/recruiter/jobs/new">
+          <Button variant="primary" size="md" icon={<IconPlus size={16} />}>
+            Post New Job
+          </Button>
+        </Link>
+      </div>
+
+      {/* Warning if company name not set */}
+      {profile && !profile.company_name && (
+        <Card style={{ marginBottom: "var(--space-6)", borderLeft: "3px solid var(--color-warning)" }}>
+          <CardBody style={{ padding: "var(--space-6)" }}>
+            <h4 style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", marginBottom: "4px" }}>
+              Complete Your Company Profile
+            </h4>
+            <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: "var(--space-4)" }}>
+              Before publishing new engineering requisitions, please register your company name and sector.
             </p>
-            <form onSubmit={handleSaveProfile} style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <form onSubmit={handleSaveProfile} style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
               <input
                 type="text"
                 placeholder="Company Name (e.g. Acme Corp)"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 required
-                style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", flex: 1, minWidth: "200px" }}
+                className="tb-input"
+                style={{ flex: 1, minWidth: "220px", height: "36px" }}
               />
               <input
                 type="text"
-                placeholder="Industry (e.g. Fintech, Health, Edtech)"
+                placeholder="Industry (e.g. Fintech, Healthcare)"
                 value={industry}
                 onChange={(e) => setIndustry(e.target.value)}
-                style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", flex: 1, minWidth: "160px" }}
+                className="tb-input"
+                style={{ flex: 1, minWidth: "180px", height: "36px" }}
               />
-              <button
-                type="submit"
-                disabled={updatingProfile}
-                style={{ padding: "8px 16px", background: "#1a5fa6", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "500" }}
-              >
-                {updatingProfile ? "Saving..." : "Save Profile"}
-              </button>
+              <Button type="submit" variant="primary" size="sm" loading={updatingProfile}>
+                Save Company Name
+              </Button>
             </form>
-          </div>
-        )}
+          </CardBody>
+        </Card>
+      )}
 
-        {/* Stats Grid */}
-        <div className="ph-home__stats">
-          <div className="ph-stat">
-            <p className="ph-stat__label">Open jobs</p>
-            <p className="ph-stat__value">{totals.open}</p>
-          </div>
-          <div className="ph-stat">
-            <p className="ph-stat__label">Total applicants</p>
-            <p className="ph-stat__value">{totals.applicants}</p>
-          </div>
-          <div className="ph-stat">
-            <p className="ph-stat__label">Interviews / Reviewed</p>
-            <p className="ph-stat__value">{totals.interviewed}</p>
-          </div>
-          <div className="ph-stat">
-            <p className="ph-stat__label">Shortlisted candidates</p>
-            <p className="ph-stat__value">{totals.shortlisted}</p>
-          </div>
-        </div>
+      {error && (
+        <Alert variant="danger" title="Notice" style={{ marginBottom: "var(--space-6)" }}>
+          {error}
+        </Alert>
+      )}
 
-        {/* Recent Jobs Table */}
-        <div className="ph-home__section">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <h2 className="ph-home__heading" style={{ margin: 0 }}>Active Job Postings</h2>
-            <Link to="/recruiter/jobs" style={{ fontSize: "14px", color: "#1a5fa6", textDecoration: "none", fontWeight: "500" }}>
-              View all jobs →
-            </Link>
-          </div>
+      {/* Stats Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <StatTile
+          label="Open Requisitions"
+          value={loading ? "..." : totals.open}
+          icon={<IconBriefcase size={20} />}
+          subtext="Currently published"
+        />
+        <StatTile
+          label="Total Applicants"
+          value={loading ? "..." : totals.applicants}
+          icon={<IconUser size={20} />}
+          subtext="Across all positions"
+        />
+        <StatTile
+          label="Interviews Completed"
+          value={loading ? "..." : totals.interviewed}
+          icon={<IconClock size={20} />}
+          subtext="With AI voice evaluations"
+        />
+        <StatTile
+          label="Shortlisted Candidates"
+          value={loading ? "..." : totals.shortlisted}
+          icon={<IconCheckCircle size={20} />}
+          trendType="positive"
+          subtext="High-fit verified talent"
+        />
+      </div>
 
-          {loading ? (
-            <div style={{ textAlign: "center", padding: "32px", color: "#666" }}>
-              <p>Loading your job listings...</p>
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="ph-table-card" style={{ textAlign: "center", padding: "40px 20px" }}>
-              <p style={{ fontSize: "16px", color: "#555", margin: "0 0 12px" }}>
-                You have not created any job postings yet.
-              </p>
-              <Link
-                to="/recruiter/jobs/new"
-                style={{
-                  display: "inline-block",
-                  padding: "8px 16px",
-                  background: "#1a5fa6",
-                  color: "#fff",
-                  borderRadius: "6px",
-                  textDecoration: "none",
-                  fontWeight: "500",
-                }}
-              >
-                Create your first job posting
-              </Link>
-            </div>
-          ) : (
-            <div className="ph-table-card">
-              <table className="ph-table">
-                <thead>
-                  <tr>
-                    <th>Job Title</th>
-                    <th>Status</th>
-                    <th>Required Skills</th>
-                    <th>Location</th>
-                    <th style={{ textAlign: "right" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {jobs.map((job) => (
-                    <tr key={job.id}>
-                      <td>
-                        <strong>{job.title}</strong>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: "3px 8px",
-                            borderRadius: "10px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            textTransform: "capitalize",
-                            background: job.status === "published" ? "#e3f1d9" : "#f0f0f0",
-                            color: job.status === "published" ? "#2c5a14" : "#666",
-                          }}
-                        >
-                          {job.status === "published" ? "Open" : job.status}
-                        </span>
-                      </td>
-                      <td>
-                        {job.skills && job.skills.length > 0 ? (
-                          <span style={{ fontSize: "13px", color: "#555" }}>
-                            {job.skills.map((s) => s.skill_name).join(", ")}
-                          </span>
-                        ) : (
-                          <span style={{ color: "#999", fontSize: "13px" }}>None specified</span>
-                        )}
-                      </td>
-                      <td style={{ color: "#666" }}>{job.location || "Remote"}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <Link
-                          to={`/recruiter/jobs/${job.id}/candidates`}
-                          style={{
-                            display: "inline-block",
-                            padding: "6px 12px",
-                            background: "#1a5fa6",
-                            color: "#fff",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            fontWeight: "500",
-                            textDecoration: "none",
-                          }}
-                        >
-                          View Candidates
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+      {/* Active Jobs Table Card */}
+      <Card>
+        <CardHeader>
+          <div>
+            <CardTitle>Active Job Postings</CardTitle>
+            <CardDescription>
+              Monitor candidate pipeline health and click through to evaluate verified applicant fit.
+            </CardDescription>
+          </div>
+          <Link to="/recruiter/jobs">
+            <Button variant="ghost" size="sm">
+              View All Jobs &rarr;
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardBody style={{ padding: 0 }}>
+          <DataTable
+            columns={jobColumns}
+            data={jobs}
+            loading={loading}
+            emptyTitle="No job postings yet"
+            emptyDescription="Create your first job requisition to begin receiving verified candidate submissions."
+            keyExtractor={(j) => j.id}
+          />
+        </CardBody>
+      </Card>
+    </AppShell>
   );
 }

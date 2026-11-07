@@ -1,17 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import AppShell from "../components/layout/AppShell";
 import { useAuth } from "../context/AuthContext";
 import assessmentsApi from "../api/assessments";
 import skillsApi from "../api/skills";
-import "../styles/dashboard.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import Modal from "../components/ui/Modal";
+import Skeleton from "../components/ui/Skeleton";
+import {
+  IconAward,
+  IconShield,
+  IconClock,
+  IconAlertCircle,
+  IconCheckCircle,
+  IconVolume2,
+  IconArrowLeft,
+  IconArrowRight,
+  IconSparkles,
+} from "../components/ui/Icons";
 
 export default function AssessmentPage() {
   const { skillId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, isJobSeeker } = useAuth();
 
-  // Mode: 'catalog' | 'test' | 'results'
+  // Mode: 'catalog' | 'ready' | 'test' | 'results'
   const [mode, setMode] = useState(skillId ? "ready" : "catalog");
 
   // Catalog State
@@ -24,14 +40,28 @@ export default function AssessmentPage() {
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState({}); // question_id -> candidate_answer string
+  const [answers, setAnswers] = useState({});
   const [startingTest, setStartingTest] = useState(false);
   const [submittingTest, setSubmittingTest] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(900); // 15 mins default
+  const [secondsLeft, setSecondsLeft] = useState(900);
 
   // Results State
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+
+  // Proctoring & Anti-Cheat State
+  const [tabViolations, setTabViolations] = useState(0);
+  const [showViolationModal, setShowViolationModal] = useState(false);
+  const [violationMessage, setViolationMessage] = useState("");
+  const [showCopyWarning, setShowCopyWarning] = useState(false);
+  const violationsRef = useRef(0);
+  const lastViolationTimeRef = useRef(0);
+
+  // Audio State
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(false);
+  const currentAudioRef = useRef(null);
 
   // Load Skills catalog
   useEffect(() => {
@@ -55,6 +85,148 @@ export default function AssessmentPage() {
     }
     loadCatalog();
   }, [skillId]);
+
+  // 1. Anti-cheat copy/paste & context menu prevention
+  const triggerCopyWarning = (e) => {
+    if (e) e.preventDefault();
+    setShowCopyWarning(true);
+    setTimeout(() => setShowCopyWarning(false), 3000);
+  };
+
+  useEffect(() => {
+    if (mode !== "test") return;
+
+    const preventClipboard = (e) => triggerCopyWarning(e);
+    const preventContextMenu = (e) => {
+      e.preventDefault();
+      triggerCopyWarning();
+    };
+
+    document.addEventListener("copy", preventClipboard);
+    document.addEventListener("cut", preventClipboard);
+    document.addEventListener("paste", preventClipboard);
+    document.addEventListener("contextmenu", preventContextMenu);
+
+    return () => {
+      document.removeEventListener("copy", preventClipboard);
+      document.removeEventListener("cut", preventClipboard);
+      document.removeEventListener("paste", preventClipboard);
+      document.removeEventListener("contextmenu", preventContextMenu);
+    };
+  }, [mode]);
+
+  // 2. Anti-cheat tab switch and window blur detection
+  useEffect(() => {
+    if (mode !== "test") return;
+
+    const handleWindowViolation = () => {
+      const now = Date.now();
+      if (now - lastViolationTimeRef.current < 2500) return;
+      lastViolationTimeRef.current = now;
+
+      const next = violationsRef.current + 1;
+      violationsRef.current = next;
+      setTabViolations(next);
+
+      if (next >= 3) {
+        setViolationMessage(
+          "Maximum window switch limit exceeded (3/3). In accordance with Thibitisha evaluation integrity rules, your assessment has been automatically terminated and submitted."
+        );
+        setShowViolationModal(true);
+        handleSubmitTest();
+      } else {
+        setViolationMessage(
+          `Window / Tab switch detected (Violation ${next} of 3). Navigating away from the active assessment window is strictly prohibited. If you reach 3 violations, your assessment will be immediately terminated.`
+        );
+        setShowViolationModal(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) handleWindowViolation();
+    };
+
+    const handleBlur = () => {
+      handleWindowViolation();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [mode, activeAssessment, questions, answers]);
+
+  // 3. Audio Speech Synthesis & Playback
+  const stopAudio = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setAudioPlaying(false);
+    setAudioLoading(false);
+  };
+
+  const playQuestionAudio = async (question) => {
+    if (!question) return;
+
+    if (audioPlaying) {
+      stopAudio();
+      return;
+    }
+
+    stopAudio();
+    setAudioLoading(true);
+
+    try {
+      const blob = await assessmentsApi.getQuestionAudio(activeAssessment.id, question.id);
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+
+      audio.onended = () => {
+        setAudioPlaying(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        fallbackBrowserSpeech(question.question_text);
+      };
+
+      await audio.play();
+      setAudioPlaying(true);
+    } catch {
+      fallbackBrowserSpeech(question.question_text);
+    } finally {
+      setAudioLoading(false);
+    }
+  };
+
+  const fallbackBrowserSpeech = (text) => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.onend = () => setAudioPlaying(false);
+      utterance.onerror = () => setAudioPlaying(false);
+      setAudioPlaying(true);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setAudioPlaying(false);
+    }
+  };
+
+  useEffect(() => {
+    stopAudio();
+    if (mode === "test" && autoPlayAudio && questions[currentIndex]) {
+      playQuestionAudio(questions[currentIndex]);
+    }
+  }, [currentIndex, mode]);
 
   // Timer countdown during active test
   useEffect(() => {
@@ -90,19 +262,20 @@ export default function AssessmentPage() {
     setError("");
 
     try {
-      // 1. Start assessment
       const assessment = await assessmentsApi.startAssessment({
         skill_id: selectedSkillId,
         difficulty_level: difficulty,
       });
       setActiveAssessment(assessment);
 
-      // 2. Fetch public questions
       const qList = await assessmentsApi.getQuestions(assessment.id);
       setQuestions(qList || []);
       setCurrentIndex(0);
       setAnswers({});
-      setSecondsLeft((assessment.total_questions || 5) * 180); // 3 mins per question
+      setSecondsLeft((assessment.total_questions || 5) * 180);
+      violationsRef.current = 0;
+      setTabViolations(0);
+      setShowViolationModal(false);
       setMode("test");
     } catch (err) {
       setError(err.message || "Failed to start assessment. Please try again.");
@@ -119,6 +292,7 @@ export default function AssessmentPage() {
   };
 
   const handleSubmitTest = async () => {
+    stopAudio();
     if (!activeAssessment || submittingTest) return;
     setSubmittingTest(true);
     setError("");
@@ -152,35 +326,161 @@ export default function AssessmentPage() {
   };
 
   return (
-    <div className="ph-dash">
-      <Navbar />
+    <AppShell>
+      {/* Toast Alert for Copy/Paste Warning */}
+      {showCopyWarning && (
+        <div
+          style={{
+            position: "fixed",
+            top: "var(--space-6)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            backgroundColor: "var(--color-danger)",
+            color: "var(--accent-contrast)",
+            padding: "var(--space-3) var(--space-5)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-lg)",
+            fontSize: "var(--font-size-sm)",
+            fontWeight: "var(--font-weight-medium)",
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2)",
+          }}
+          role="alert"
+        >
+          <IconShield size={16} />
+          <span>Anti-Cheating Notice: Copying and pasting is disabled during assessments.</span>
+        </div>
+      )}
 
-      <main className="ph-dash__main">
-        {/* Alerts */}
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
-            {error}
+      {/* Proctoring Violation Modal */}
+      <Modal
+        isOpen={showViolationModal}
+        onClose={() => {
+          if (tabViolations < 3) setShowViolationModal(false);
+        }}
+        title="Proctoring Focus Alert"
+        showClose={tabViolations < 3}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              backgroundColor: tabViolations >= 3 ? "var(--color-danger-bg)" : "var(--color-warning-bg)",
+              color: tabViolations >= 3 ? "var(--color-danger)" : "var(--color-warning)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto var(--space-4)",
+            }}
+          >
+            <IconAlertCircle size={24} />
           </div>
-        )}
 
-        {/* MODE 1: Catalog or Ready to Start */}
-        {(mode === "catalog" || mode === "ready") && (
-          <div>
-            <div style={{ marginBottom: "28px" }}>
-              <h1 className="ph-dash__title">Skill Assessments & Verification</h1>
-              <p className="ph-dash__sub">
-                Take an AI-proctored technical test to verify your skills. Earn verified credentials that rank you ahead of unverified CV claims.
-              </p>
+          <h3 style={{ fontSize: "var(--font-size-lg)", marginBottom: "var(--space-2)" }}>
+            {tabViolations >= 3 ? "Assessment Terminated" : "Window Focus Violation"}
+          </h3>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginBottom: "var(--space-6)" }}>
+            {violationMessage}
+          </p>
+
+          {tabViolations < 3 ? (
+            <Button
+              variant="primary"
+              size="md"
+              style={{ width: "100%" }}
+              onClick={() => setShowViolationModal(false)}
+            >
+              I Understand &bull; Return to Test
+            </Button>
+          ) : (
+            <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-faint)" }}>
+              Submitting test results for evaluation...
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      {/* General Error Banner */}
+      {error && (
+        <Alert variant="danger" title="Assessment Notice" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-6)" }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* MODE 1: Catalog / Ready */}
+      {(mode === "catalog" || mode === "ready") && (
+        <div>
+          {/* Header */}
+          <div style={{ marginBottom: "var(--space-8)" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "3px 10px",
+                borderRadius: "var(--radius-pill)",
+                backgroundColor: "var(--accent-subtle)",
+                color: "var(--accent)",
+                fontSize: "var(--font-size-xs)",
+                fontWeight: "var(--font-weight-medium)",
+                marginBottom: "var(--space-2)",
+                border: "1px solid var(--accent-subtle-border)",
+              }}
+            >
+              <IconAward size={13} /> Verifiable Technical Standards
             </div>
+            <h1
+              style={{
+                fontSize: "var(--font-size-3xl)",
+                fontWeight: "var(--font-weight-semibold)",
+                letterSpacing: "var(--tracking-tighter)",
+                color: "var(--text)",
+                marginBottom: "var(--space-2)",
+              }}
+            >
+              Skill Assessments & Verification
+            </h1>
+            <p style={{ fontSize: "var(--font-size-base)", color: "var(--text-muted)", maxWidth: "680px" }}>
+              Take proctored technical evaluations to earn verified credentials. Verified candidates
+              rank higher in employer candidate pipelines.
+            </p>
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "24px", alignItems: "start" }}>
-              {/* Skill Selection Grid */}
-              <div className="ph-table-card" style={{ padding: "24px" }}>
-                <h2 style={{ fontSize: "18px", margin: "0 0 16px", fontWeight: "600" }}>Choose a Technical Domain</h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 340px",
+              gap: "var(--space-6)",
+              alignItems: "start",
+            }}
+          >
+            {/* Domain / Skill Selection Grid */}
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Technical Domains</CardTitle>
+                  <CardDescription>Select a skill category to evaluate.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
                 {loadingSkills ? (
-                  <p style={{ color: "#666" }}>Loading available skills...</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "var(--space-3)" }}>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} height="64px" radius="var(--radius-md)" />
+                    ))}
+                  </div>
                 ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                      gap: "var(--space-3)",
+                    }}
+                  >
                     {skills.map((s) => {
                       const isSelected = selectedSkillId === s.id;
                       return (
@@ -191,126 +491,273 @@ export default function AssessmentPage() {
                             setMode("ready");
                           }}
                           style={{
-                            padding: "14px",
-                            borderRadius: "8px",
-                            border: `2px solid ${isSelected ? "#1a5fa6" : "#e8e8e6"}`,
-                            background: isSelected ? "#f0f4f8" : "#fff",
+                            padding: "var(--space-4)",
+                            borderRadius: "var(--radius-md)",
+                            border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                            backgroundColor: isSelected ? "var(--accent-subtle)" : "var(--surface)",
                             cursor: "pointer",
-                            transition: "all 0.15s ease",
+                            transition: "all var(--duration-micro) var(--ease-enter)",
                           }}
                         >
-                          <p style={{ margin: 0, fontWeight: "600", fontSize: "14px", color: isSelected ? "#1a5fa6" : "#1a1a1a" }}>
+                          <strong
+                            style={{
+                              display: "block",
+                              fontSize: "var(--font-size-sm)",
+                              color: isSelected ? "var(--accent)" : "var(--text)",
+                              marginBottom: "2px",
+                            }}
+                          >
                             {s.name}
-                          </p>
-                          <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#666" }}>
-                            {s.category || "Technology"}
-                          </p>
+                          </strong>
+                          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                            {s.category || "General Engineering"}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </CardBody>
+            </Card>
 
-              {/* Start Assessment Config Card */}
-              <div className="ph-table-card" style={{ padding: "24px" }}>
-                <h2 style={{ fontSize: "18px", margin: "0 0 16px", fontWeight: "600" }}>Test Configuration</h2>
-
+            {/* Test Configuration Panel */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Test Configuration</CardTitle>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
                 {selectedSkillId ? (
                   <div>
-                    <p style={{ fontSize: "14px", color: "#555", marginBottom: "16px" }}>
-                      Selected skill: <strong>{skills.find((s) => s.id === selectedSkillId)?.name || "Technical Skill"}</strong>
-                    </p>
-
-                    <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "6px", color: "#333" }}>
-                      Difficulty Level
-                    </label>
-                    <select
-                      value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value)}
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #d4d4d4", fontSize: "14px", marginBottom: "20px" }}
-                    >
-                      <option value="beginner">Beginner (Foundations & Syntax)</option>
-                      <option value="intermediate">Intermediate (Real-world scenarios)</option>
-                      <option value="advanced">Advanced (Architecture & Optimization)</option>
-                    </select>
-
-                    <div style={{ background: "#f8f9fa", padding: "14px", borderRadius: "6px", fontSize: "13px", color: "#555", marginBottom: "20px" }}>
-                      <p style={{ margin: "0 0 6px" }}>⏱ <strong>Format:</strong> 5 targeted questions</p>
-                      <p style={{ margin: "0 0 6px" }}>🎯 <strong>Scoring:</strong> Multiple choice & practical</p>
-                      <p style={{ margin: 0 }}>🛡 <strong>Passing:</strong> 60% or higher for verification</p>
+                    <div style={{ marginBottom: "var(--space-4)" }}>
+                      <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", display: "block" }}>
+                        Selected Skill
+                      </span>
+                      <strong style={{ fontSize: "var(--font-size-base)", color: "var(--text)" }}>
+                        {skills.find((s) => s.id === selectedSkillId)?.name || "Technical Skill"}
+                      </strong>
                     </div>
 
-                    <button
-                      type="button"
-                      className="ph-btn"
-                      onClick={handleStartTest}
-                      disabled={startingTest}
-                      style={{ width: "100%" }}
+                    <div style={{ marginBottom: "var(--space-5)" }}>
+                      <label className="tb-label" htmlFor="difficulty" style={{ marginBottom: "var(--space-1)" }}>
+                        Difficulty Level
+                      </label>
+                      <select
+                        id="difficulty"
+                        className="tb-select"
+                        value={difficulty}
+                        onChange={(e) => setDifficulty(e.target.value)}
+                      >
+                        <option value="beginner">Beginner (Core Syntax & Concepts)</option>
+                        <option value="intermediate">Intermediate (Real-world Scenarios)</option>
+                        <option value="advanced">Advanced (Architecture & Optimization)</option>
+                      </select>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "var(--space-4)",
+                        borderRadius: "var(--radius-md)",
+                        backgroundColor: "var(--surface-raised)",
+                        border: "1px solid var(--border-subtle)",
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--text-muted)",
+                        marginBottom: "var(--space-6)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
                     >
-                      {startingTest ? "Generating questions with AI..." : "Start Assessment Now"}
-                    </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <IconClock size={14} color="var(--accent)" />
+                        <span>5 questions &bull; ~15 minutes duration</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <IconShield size={14} color="var(--accent)" />
+                        <span>AI-proctored &bull; Copy/paste prevention</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <IconAward size={14} color="var(--color-success)" />
+                        <span>Passing standard: 60%+ score for verified badge</span>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      style={{ width: "100%" }}
+                      onClick={handleStartTest}
+                      loading={startingTest}
+                      icon={<IconArrowRight size={16} />}
+                    >
+                      {startingTest ? "Generating with Gemini..." : "Start Assessment"}
+                    </Button>
                   </div>
                 ) : (
-                  <p style={{ fontSize: "14px", color: "#777", margin: 0 }}>
-                    Select a skill from the list on the left to review instructions and start the assessment.
+                  <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: 0 }}>
+                    Select a skill from the list on the left to configure difficulty and begin.
                   </p>
                 )}
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* MODE 2: Active Test Session */}
+      {mode === "test" && currentQ && (
+        <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+          {/* Proctoring Status Header */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "var(--space-4)",
+              flexWrap: "wrap",
+              gap: "var(--space-3)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <strong style={{ fontSize: "var(--font-size-base)", color: "var(--text)" }}>
+                {activeAssessment?.skill_name} ({difficulty})
+              </strong>
+              <Badge variant={tabViolations > 0 ? "danger" : "success"} dot>
+                Proctored: Switches {tabViolations}/3
+              </Badge>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                Question {currentIndex + 1} of {questions.length}
+              </span>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 10px",
+                  borderRadius: "var(--radius-md)",
+                  backgroundColor: secondsLeft < 120 ? "var(--color-danger-bg)" : "var(--surface-sunken)",
+                  color: secondsLeft < 120 ? "var(--color-danger)" : "var(--text)",
+                  fontFamily: "var(--font-mono)",
+                  fontWeight: "var(--font-weight-semibold)",
+                  fontSize: "var(--font-size-sm)",
+                  border: `1px solid ${secondsLeft < 120 ? "var(--color-danger-border)" : "var(--border-subtle)"}`,
+                }}
+              >
+                <IconClock size={15} />
+                <span className="tabular-nums">{formatTimer(secondsLeft)}</span>
               </div>
             </div>
           </div>
-        )}
 
-        {/* MODE 2: Active Test Session */}
-        {mode === "test" && currentQ && (
-          <div style={{ maxWidth: "800px", margin: "0 auto" }}>
-            {/* Top Bar with Timer and Progress */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <span style={{ fontSize: "14px", fontWeight: "600", color: "#1a5fa6" }}>
-                {activeAssessment?.skill_name} Assessment ({difficulty})
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                <span style={{ fontSize: "13px", color: "#666" }}>
-                  Question {currentIndex + 1} of {questions.length}
-                </span>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "700",
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    background: secondsLeft < 120 ? "#fee4e2" : "#f0f4f8",
-                    color: secondsLeft < 120 ? "#b42318" : "#1a5fa6",
-                  }}
-                >
-                  ⏱ {formatTimer(secondsLeft)}
-                </span>
+          {/* Progress Indicator */}
+          <div
+            style={{
+              height: "4px",
+              backgroundColor: "var(--surface-sunken)",
+              borderRadius: "var(--radius-pill)",
+              overflow: "hidden",
+              marginBottom: "var(--space-6)",
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPercent}%`,
+                height: "100%",
+                backgroundColor: "var(--accent)",
+                transition: "width var(--duration-standard) var(--ease-enter)",
+              }}
+            />
+          </div>
+
+          {/* Question Card */}
+          <Card style={{ marginBottom: "var(--space-6)" }}>
+            <CardBody style={{ padding: "var(--space-8)" }}>
+              {/* Question Meta & Audio Read Aloud */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "var(--space-4)",
+                  flexWrap: "wrap",
+                  gap: "var(--space-3)",
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      textTransform: "uppercase",
+                      letterSpacing: "var(--tracking-wide)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    Question {currentIndex + 1} ({currentQ.marks || 1} mark{currentQ.marks > 1 ? "s" : ""})
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: "var(--space-3)",
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--text-faint)",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {currentQ.question_type.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                  <Button
+                    variant={audioPlaying ? "primary" : "secondary"}
+                    size="sm"
+                    icon={<IconVolume2 size={14} />}
+                    onClick={() => playQuestionAudio(currentQ)}
+                    loading={audioLoading}
+                  >
+                    {audioLoading ? "Loading Audio..." : audioPlaying ? "Stop Voice" : "Listen (TTS)"}
+                  </Button>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={autoPlayAudio}
+                      onChange={(e) => setAutoPlayAudio(e.target.checked)}
+                    />
+                    Auto-read
+                  </label>
+                </div>
               </div>
-            </div>
 
-            {/* Progress Bar */}
-            <div style={{ height: "6px", background: "#e8e8e6", borderRadius: "3px", overflow: "hidden", marginBottom: "24px" }}>
-              <div style={{ width: `${progressPercent}%`, height: "100%", background: "#1a5fa6", transition: "width 0.3s ease" }} />
-            </div>
-
-            {/* Question Card */}
-            <div className="ph-table-card" style={{ padding: "32px", marginBottom: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-                <span style={{ fontSize: "12px", textTransform: "uppercase", fontWeight: "700", color: "#888" }}>
-                  Question {currentIndex + 1} ({currentQ.marks || 1} mark{currentQ.marks > 1 ? "s" : ""})
-                </span>
-                <span style={{ fontSize: "12px", textTransform: "capitalize", color: "#666" }}>
-                  {currentQ.question_type.replace("_", " ")}
-                </span>
-              </div>
-
-              <h2 style={{ fontSize: "18px", fontWeight: "600", lineHeight: "1.4", margin: "0 0 24px", color: "#1a1a1a" }}>
+              {/* Uncopyable Question Text */}
+              <h2
+                style={{
+                  fontSize: "var(--font-size-lg)",
+                  fontWeight: "var(--font-weight-semibold)",
+                  lineHeight: "var(--line-height-snug)",
+                  color: "var(--text)",
+                  marginBottom: "var(--space-6)",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                }}
+              >
                 {currentQ.question_text}
               </h2>
 
               {/* Options for MCQ */}
               {currentQ.question_type === "multiple_choice" && currentQ.options && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                   {currentQ.options.map((opt, i) => {
                     const isChecked = answers[currentQ.id] === opt;
                     return (
@@ -319,13 +766,16 @@ export default function AssessmentPage() {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "12px",
-                          padding: "14px 16px",
-                          borderRadius: "8px",
-                          border: `2px solid ${isChecked ? "#1a5fa6" : "#e8e8e6"}`,
-                          background: isChecked ? "#f0f4f8" : "#fff",
+                          gap: "var(--space-3)",
+                          padding: "var(--space-4)",
+                          borderRadius: "var(--radius-md)",
+                          border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                          backgroundColor: isChecked ? "var(--accent-subtle)" : "var(--surface)",
                           cursor: "pointer",
-                          fontSize: "15px",
+                          fontSize: "var(--font-size-sm)",
+                          userSelect: "none",
+                          WebkitUserSelect: "none",
+                          transition: "all var(--duration-micro) var(--ease-enter)",
                         }}
                       >
                         <input
@@ -335,247 +785,241 @@ export default function AssessmentPage() {
                           checked={isChecked}
                           onChange={() => handleSelectAnswer(currentQ.id, opt)}
                         />
-                        <span>{opt}</span>
+                        <span style={{ color: "var(--text)" }}>{opt}</span>
                       </label>
                     );
                   })}
                 </div>
               )}
 
-              {/* Input for Practical / Open-ended */}
+              {/* Practical Code/Open-Ended Answer Input */}
               {currentQ.question_type !== "multiple_choice" && (
                 <div>
                   <textarea
                     rows={6}
-                    placeholder="Type your explanation or code solution here..."
+                    placeholder="Type your explanation or code solution here... (Note: pasting external content is locked during assessments)"
                     value={answers[currentQ.id] || ""}
                     onChange={(e) => handleSelectAnswer(currentQ.id, e.target.value)}
+                    onCopy={triggerCopyWarning}
+                    onCut={triggerCopyWarning}
+                    onPaste={triggerCopyWarning}
+                    onContextMenu={triggerCopyWarning}
+                    className="tb-textarea"
                     style={{
-                      width: "100%",
-                      padding: "14px",
-                      borderRadius: "8px",
-                      border: "1px solid #d4d4d4",
-                      fontSize: "14px",
-                      fontFamily: "monospace",
-                      boxSizing: "border-box",
-                      resize: "vertical",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--font-size-sm)",
                     }}
                   />
                 </div>
               )}
-            </div>
+            </CardBody>
+          </Card>
 
-            {/* Navigation Actions */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button
-                type="button"
-                onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
-                disabled={currentIndex === 0}
-                style={{
-                  padding: "10px 18px",
-                  background: "#fff",
-                  border: "1px solid #d4d4d4",
-                  borderRadius: "6px",
-                  fontSize: "14px",
-                  cursor: currentIndex === 0 ? "not-allowed" : "pointer",
-                  color: currentIndex === 0 ? "#aaa" : "#333",
-                }}
+          {/* Navigation Controls */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<IconArrowLeft size={15} />}
+              onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
+              disabled={currentIndex === 0}
+            >
+              Previous
+            </Button>
+
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+              Answered {answeredCount} of {questions.length} questions
+            </span>
+
+            {currentIndex < questions.length - 1 ? (
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
               >
-                ← Previous
-              </button>
-
-              <span style={{ fontSize: "13px", color: "#666" }}>
-                Answered {answeredCount} of {questions.length} questions
-              </span>
-
-              {currentIndex < questions.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
-                  style={{
-                    padding: "10px 20px",
-                    background: "#1a5fa6",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                  }}
-                >
-                  Next Question →
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmitTest}
-                  disabled={submittingTest}
-                  style={{
-                    padding: "10px 24px",
-                    background: "#2c5a14",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                  }}
-                >
-                  {submittingTest ? "Scoring with Gemini AI..." : "Submit Assessment"}
-                </button>
-              )}
-            </div>
+                <span>Next Question</span>
+                <IconArrowRight size={15} />
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="md"
+                loading={submittingTest}
+                onClick={handleSubmitTest}
+              >
+                {submittingTest ? "Evaluating Answers..." : "Submit Assessment"}
+              </Button>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* MODE 3: Scorecard & Explanations */}
-        {mode === "results" && result && (
-          <div style={{ maxWidth: "800px", margin: "0 auto" }}>
-            <div className="ph-table-card" style={{ padding: "36px", textAlign: "center", marginBottom: "28px" }}>
+      {/* MODE 3: Scorecard & Explanations */}
+      {mode === "results" && result && (
+        <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+          <Card style={{ marginBottom: "var(--space-6)", textAlign: "center" }}>
+            <CardBody style={{ padding: "var(--space-10)" }}>
               <div
                 style={{
-                  width: "72px",
-                  height: "72px",
+                  width: "64px",
+                  height: "64px",
                   borderRadius: "50%",
-                  background: result.passed ? "#e3f1d9" : "#fee4e2",
-                  color: result.passed ? "#2c5a14" : "#b42318",
+                  backgroundColor: result.passed ? "var(--color-success-bg)" : "var(--color-danger-bg)",
+                  color: result.passed ? "var(--color-success)" : "var(--color-danger)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "32px",
-                  margin: "0 auto 16px",
-                  fontWeight: "bold",
+                  margin: "0 auto var(--space-4)",
                 }}
               >
-                {result.passed ? "✓" : "!"}
+                {result.passed ? <IconCheckCircle size={32} /> : <IconAlertCircle size={32} />}
               </div>
 
-              <h1 style={{ fontSize: "28px", margin: "0 0 8px", fontWeight: "700" }}>
+              <h1
+                style={{
+                  fontSize: "var(--font-size-2xl)",
+                  fontWeight: "var(--font-weight-semibold)",
+                  color: "var(--text)",
+                  marginBottom: "var(--space-2)",
+                }}
+              >
                 {result.passed ? "Assessment Passed!" : "Assessment Complete"}
               </h1>
-              <p style={{ color: "#666", fontSize: "15px", margin: "0 0 24px" }}>
-                {result.skill_name} Technical Evaluation · {result.difficulty_level}
+              <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginBottom: "var(--space-6)" }}>
+                {result.skill_name} Technical Evaluation &bull; Level: {result.difficulty_level}
               </p>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: "24px", marginBottom: "28px" }}>
-                <div style={{ background: "#f7f6f4", padding: "16px 24px", borderRadius: "8px" }}>
-                  <p style={{ margin: "0 0 4px", fontSize: "12px", color: "#666", textTransform: "uppercase" }}>Score</p>
-                  <p style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#1a5fa6" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "var(--space-4)",
+                  marginBottom: "var(--space-8)",
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: "var(--surface-raised)",
+                    padding: "var(--space-4) var(--space-6)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
+                    Verified Score
+                  </span>
+                  <span
+                    className="tabular-nums"
+                    style={{ fontSize: "var(--font-size-3xl)", fontWeight: "var(--font-weight-semibold)", color: "var(--accent)" }}
+                  >
                     {result.percentage != null ? `${Math.round(result.percentage)}%` : `${result.score}/${result.total_marks}`}
-                  </p>
+                  </span>
                 </div>
-                <div style={{ background: "#f7f6f4", padding: "16px 24px", borderRadius: "8px" }}>
-                  <p style={{ margin: "0 0 4px", fontSize: "12px", color: "#666", textTransform: "uppercase" }}>Credential Level</p>
-                  <p style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#2c5a14", textTransform: "capitalize" }}>
+
+                <div
+                  style={{
+                    backgroundColor: "var(--surface-raised)",
+                    padding: "var(--space-4) var(--space-6)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
+                    Credential Status
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "var(--font-size-2xl)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      color: result.passed ? "var(--color-success)" : "var(--color-warning)",
+                      textTransform: "capitalize",
+                    }}
+                  >
                     {result.verification_level || (result.passed ? "Verified" : "Unverified")}
-                  </p>
+                  </span>
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-                <Link
-                  to="/dashboard"
-                  style={{
-                    padding: "10px 20px",
-                    background: "#1a5fa6",
-                    color: "#fff",
-                    borderRadius: "6px",
-                    textDecoration: "none",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                  }}
-                >
-                  Return to Dashboard
+              <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                <Link to="/dashboard">
+                  <Button variant="primary" size="md">
+                    Return to Dashboard
+                  </Button>
                 </Link>
-                <Link
-                  to="/leaderboard"
-                  style={{
-                    padding: "10px 20px",
-                    background: "#fff",
-                    border: "1px solid #d4d4d4",
-                    color: "#333",
-                    borderRadius: "6px",
-                    textDecoration: "none",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                  }}
-                >
-                  View Leaderboard
+                <Link to="/leaderboard">
+                  <Button variant="secondary" size="md">
+                    View Leaderboard
+                  </Button>
                 </Link>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="md"
                   onClick={() => {
                     setMode("catalog");
                     setResult(null);
                   }}
-                  style={{
-                    padding: "10px 20px",
-                    background: "none",
-                    border: "none",
-                    color: "#555",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    fontSize: "14px",
-                  }}
                 >
                   Test Another Skill
-                </button>
+                </Button>
               </div>
-            </div>
+            </CardBody>
+          </Card>
 
-            {/* Detailed Question Review */}
-            {result.questions && result.questions.length > 0 && (
-              <div className="ph-table-card" style={{ padding: "28px" }}>
-                <h2 style={{ fontSize: "18px", margin: "0 0 20px", fontWeight: "600" }}>Question Breakdown & Explanations</h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Breakdown by question */}
+          {result.questions && result.questions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Evaluation Breakdown & Feedback</CardTitle>
+              </CardHeader>
+              <CardBody style={{ padding: "var(--space-6)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                   {result.questions.map((q, idx) => (
                     <div
                       key={q.id || idx}
                       style={{
-                        padding: "16px",
-                        borderRadius: "8px",
-                        border: `1px solid ${q.is_correct ? "#c8e6c9" : "#ffcdd2"}`,
-                        background: q.is_correct ? "#f9fcf8" : "#fffbfa",
+                        padding: "var(--space-4)",
+                        borderRadius: "var(--radius-md)",
+                        border: `1px solid ${q.is_correct ? "var(--color-success-border)" : "var(--color-danger-border)"}`,
+                        backgroundColor: q.is_correct ? "var(--color-success-bg)" : "var(--color-danger-bg)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                        <span style={{ fontWeight: "600", fontSize: "14px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-2)" }}>
+                        <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
                           Question {idx + 1}: {q.question_text}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            fontWeight: "700",
-                            padding: "2px 8px",
-                            borderRadius: "10px",
-                            background: q.is_correct ? "#e3f1d9" : "#fee4e2",
-                            color: q.is_correct ? "#2c5a14" : "#b42318",
-                          }}
-                        >
+                        </strong>
+                        <Badge variant={q.is_correct ? "success" : "danger"}>
                           {q.is_correct ? `+${q.awarded_marks || 1} mark` : "0 marks"}
-                        </span>
+                        </Badge>
                       </div>
 
-                      <p style={{ margin: "4px 0", fontSize: "13px", color: "#444" }}>
-                        <strong>Your answer:</strong> {q.candidate_answer || "None"}
+                      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", margin: "4px 0" }}>
+                        <strong>Your answer:</strong> {q.candidate_answer || "None provided"}
                       </p>
-                      <p style={{ margin: "4px 0", fontSize: "13px", color: "#2c5a14" }}>
+                      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-success)", margin: "4px 0" }}>
                         <strong>Correct answer:</strong> {q.correct_answer}
                       </p>
                       {q.explanation && (
-                        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#666", background: "#f0f0f0", padding: "8px", borderRadius: "4px" }}>
+                        <p
+                          style={{
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--text-muted)",
+                            backgroundColor: "var(--surface)",
+                            padding: "var(--space-3)",
+                            borderRadius: "var(--radius-sm)",
+                            marginTop: "var(--space-2)",
+                          }}
+                        >
                           <strong>Explanation:</strong> {q.explanation}
                         </p>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
+              </CardBody>
+            </Card>
+          )}
+        </div>
+      )}
+    </AppShell>
   );
 }
-

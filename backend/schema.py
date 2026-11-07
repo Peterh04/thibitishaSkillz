@@ -281,6 +281,7 @@ class CandidateSkillOut(BaseModel):
 class StartAssessmentRequest(BaseModel):
     skill_id: int
     difficulty_level: SkillLevel
+    force_restart: bool = False
 
 
 class QuestionPublic(BaseModel):
@@ -396,6 +397,7 @@ class JobCreate(BaseModel):
     experience_level: Optional[ExperienceLevel] = None
     status: JobStatus = JobStatus.draft
     application_deadline: Optional[datetime] = None
+    skills: Optional[list[JobSkillInput]] = None
 
     @field_validator("title", "description", "responsibilities", "qualifications", "location")
     @classmethod

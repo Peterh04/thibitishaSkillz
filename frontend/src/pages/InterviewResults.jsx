@@ -1,178 +1,204 @@
-import "../styles/results.css";
+import { Link } from "react-router-dom";
+import AppShell from "../components/layout/AppShell";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
+import StatTile from "../components/ui/StatTile";
+import {
+  IconCheckCircle,
+  IconAward,
+  IconShield,
+  IconFileText,
+  IconArrowLeft,
+  IconBriefcase,
+} from "../components/ui/Icons";
 
-// Replace with data from your API
-const RESULT = {
-  jobTitle: "Junior Data Analyst",
-  company: "Acme Insurance",
-  status: "Under review", // "Under review" | "Shortlisted" | "Not selected"
-  cvMatch: 91,
-  interview: 94,
-  overall: 93,
+const DEFAULT_RESULT = {
+  jobTitle: "Software Engineer",
+  company: "Verified Hiring Partner",
+  status: "Shortlisted",
+  cvMatch: 92,
+  interview: 88,
+  overall: 90,
   breakdown: [
     {
-      criterion: "Technical understanding",
-      score: 95,
-      note: "You explained why your approach suited the data and named its limits.",
-    },
-    {
-      criterion: "Reasoning under skewed data",
+      criterion: "Technical depth & architecture",
       score: 92,
-      note: "You spotted outliers and suggested a fix before fitting the model.",
+      note: "Clear explanation of database concurrency and indexing strategies under heavy write load.",
     },
     {
-      criterion: "Communication",
-      score: 90,
-      note: "Clear and well structured. Try adding one concrete example.",
+      criterion: "Problem-solving & edge cases",
+      score: 88,
+      note: "Identified edge conditions in distributed cache invalidation correctly.",
     },
     {
-      criterion: "Ownership of your work",
-      score: 96,
-      note: "You described your own decisions in detail.",
-    },
-  ],
-  questions: [
-    {
-      question:
-        "Your CV mentions a loss-ratio model in Python. Why did you choose that approach, and what breaks if the data is skewed?",
-      score: 94,
-      feedback:
-        "Strong answer. You covered the trade-off and what you would check first.",
-    },
-    {
-      question:
-        "How would you explain a drop in the loss ratio to a non-technical manager?",
-      score: 90,
-      feedback: "Good structure. A simple example would make it even clearer.",
+      criterion: "Communication & ownership",
+      score: 91,
+      note: "Articulated tradeoffs with high clarity and concise terminology.",
     },
   ],
 };
 
-// Adjust these routes to match your router
-const ROUTES = { jobs: "/jobs", profile: "/profile" };
-
-const MESSAGES = {
-  "Under review":
-    "The recruiter is reviewing your results. If you are shortlisted, we will text you an invite to an in-person interview.",
-  Shortlisted:
-    "You have been shortlisted. We will text you the details of your in-person interview.",
-  "Not selected":
-    "You were not selected for this role this time. Your feedback below may help with your next application.",
-};
-
-export default function InterviewResults({ result = RESULT }) {
-  const handleSignOut = () => {
-    // TODO: clear session and redirect
-    console.log("sign out");
-  };
-
+export default function InterviewResults({ result = DEFAULT_RESULT }) {
   return (
-    <div className="ph-rs">
-      <header className="ph-rs__bar">
-        <a className="ph-rs__logo" href="/">
-          <span className="ph-rs__logo-mark" />
-          ProofHire
-        </a>
-        <nav className="ph-rs__nav">
-          <a className="ph-rs__nav-link" href={ROUTES.jobs}>
-            Open jobs
-          </a>
-          <a className="ph-rs__nav-link" href={ROUTES.profile}>
-            Profile
-          </a>
-          <button
-            className="ph-rs__nav-link"
-            type="button"
-            onClick={handleSignOut}
+    <AppShell>
+      <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+        {/* Navigation back */}
+        <div style={{ marginBottom: "var(--space-6)" }}>
+          <Link
+            to="/dashboard"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "var(--font-size-sm)",
+              color: "var(--text-muted)",
+              fontWeight: "var(--font-weight-medium)",
+            }}
           >
-            Sign out
-          </button>
-        </nav>
-      </header>
+            <IconArrowLeft size={16} /> Return to Dashboard
+          </Link>
+        </div>
 
-      <main className="ph-rs__main">
-        <h1 className="ph-rs__title">Your results</h1>
-        <p className="ph-rs__sub">
-          {result.jobTitle} · {result.company}
-        </p>
+        {/* Top Summary Banner */}
+        <Card style={{ marginBottom: "var(--space-6)" }}>
+          <CardBody style={{ padding: "var(--space-8)" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "var(--space-4)",
+                marginBottom: "var(--space-6)",
+              }}
+            >
+              <div>
+                <span
+                  style={{
+                    fontSize: "var(--font-size-xs)",
+                    textTransform: "uppercase",
+                    letterSpacing: "var(--tracking-wide)",
+                    color: "var(--text-muted)",
+                    fontWeight: "var(--font-weight-semibold)",
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Verified Technical Evaluation
+                </span>
+                <h1
+                  style={{
+                    fontSize: "var(--font-size-2xl)",
+                    fontWeight: "var(--font-weight-semibold)",
+                    color: "var(--text)",
+                    margin: 0,
+                  }}
+                >
+                  {result.jobTitle} &bull; {result.company}
+                </h1>
+              </div>
 
-        <section className="ph-rs__card">
-          <div className="ph-overall">
-            <div className="ph-overall__score">
-              <p className="ph-overall__value">{result.overall}</p>
-              <p className="ph-overall__max">out of 100</p>
-            </div>
-            <div>
-              <p className="ph-overall__label">Overall score</p>
-              <span
-                className={
-                  "ph-badge" +
-                  (result.status === "Shortlisted" ? " ph-badge--good" : "")
+              <Badge
+                variant={
+                  result.status === "Shortlisted"
+                    ? "success"
+                    : result.status === "Under review"
+                    ? "accent"
+                    : "neutral"
                 }
               >
                 {result.status}
-              </span>
-              <p className="ph-overall__text">{MESSAGES[result.status]}</p>
+              </Badge>
             </div>
-          </div>
-        </section>
 
-        <div className="ph-rs__stats">
-          <div className="ph-stat">
-            <p className="ph-stat__label">CV match</p>
-            <p className="ph-stat__value">
-              {result.cvMatch} <small>/ 100</small>
-            </p>
-          </div>
-          <div className="ph-stat">
-            <p className="ph-stat__label">Interview</p>
-            <p className="ph-stat__value">
-              {result.interview} <small>/ 100</small>
-            </p>
-          </div>
-        </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "var(--space-4)",
+              }}
+            >
+              <StatTile
+                label="Overall Verified"
+                value={`${result.overall}%`}
+                icon={<IconAward size={20} />}
+                trend="Strong match"
+                trendType="positive"
+              />
+              <StatTile
+                label="CV Competency Match"
+                value={`${result.cvMatch}%`}
+                icon={<IconFileText size={20} />}
+              />
+              <StatTile
+                label="Voice Reasoning Score"
+                value={`${result.interview}%`}
+                icon={<IconShield size={20} />}
+              />
+            </div>
+          </CardBody>
+        </Card>
 
-        <section className="ph-rs__card">
-          <h2 className="ph-rs__card-title">Your breakdown</h2>
-          <ul className="ph-list">
-            {result.breakdown.map((b) => (
-              <li className="ph-list__item" key={b.criterion}>
-                <div className="ph-list__top">
-                  <span>{b.criterion}</span>
-                  <span className="ph-list__score">{b.score}</span>
-                </div>
-                <div
-                  className="ph-track"
-                  role="progressbar"
-                  aria-label={b.criterion}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={b.score}
-                >
+        {/* Criteria Breakdown */}
+        {result.breakdown && result.breakdown.length > 0 && (
+          <Card style={{ marginBottom: "var(--space-6)" }}>
+            <CardHeader>
+              <CardTitle>Evaluation Criteria Breakdown</CardTitle>
+              <CardDescription>
+                Detailed assessment of technical claims, reasoning, and system architecture.
+              </CardDescription>
+            </CardHeader>
+            <CardBody style={{ padding: "var(--space-6)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+                {result.breakdown.map((item, idx) => (
                   <div
-                    className="ph-track__fill"
-                    style={{ width: `${b.score}%` }}
-                  />
-                </div>
-                <p className="ph-list__note">{b.note}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
+                    key={idx}
+                    style={{
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--surface-raised)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-1)" }}>
+                      <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                        {item.criterion}
+                      </strong>
+                      <span
+                        className="tabular-nums"
+                        style={{
+                          fontWeight: "var(--font-weight-semibold)",
+                          color: "var(--accent)",
+                          fontSize: "var(--font-size-sm)",
+                        }}
+                      >
+                        {item.score}%
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", margin: 0 }}>
+                      {item.note}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
 
-        <p className="ph-rs__note">
-          Scores are based on your CV and your interview answers, and are
-          reviewed by the recruiter.
-        </p>
-
-        <div className="ph-rs__actions">
-          <a className="ph-btn" href={ROUTES.jobs}>
-            Browse open jobs
-          </a>
-          <a className="ph-btn ph-btn--ghost" href={ROUTES.profile}>
-            View my applications
-          </a>
+        {/* Next Steps */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)" }}>
+          <Link to="/leaderboard">
+            <Button variant="secondary" size="md">
+              View Verified Leaderboard
+            </Button>
+          </Link>
+          <Link to="/jobs">
+            <Button variant="primary" size="md" icon={<IconBriefcase size={15} />}>
+              Explore More Roles
+            </Button>
+          </Link>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

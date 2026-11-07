@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Skeleton from "./ui/Skeleton";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading, isAuthenticated } = useAuth();
@@ -7,8 +8,19 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh", fontFamily: "sans-serif", color: "#555" }}>
-        <p>Loading your workspace...</p>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "60vh",
+          gap: "var(--space-4)",
+          padding: "var(--space-8)",
+        }}
+      >
+        <Skeleton height="32px" width="220px" />
+        <Skeleton height="16px" width="340px" />
       </div>
     );
   }
@@ -18,7 +30,6 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // If employer trying to view candidate page or candidate trying to view recruiter page
     if (user.role === "employer") {
       return <Navigate to="/recruiter" replace />;
     }
@@ -27,4 +38,3 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   return children;
 }
-

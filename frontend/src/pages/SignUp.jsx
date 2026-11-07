@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "../components/AuthLayout.jsx";
+import AuthLayout from "../components/AuthLayout";
 import { useAuth } from "../context/AuthContext";
+import Card, { CardBody } from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+import Alert from "../components/ui/Alert";
+import { IconBriefcase, IconUser, IconArrowRight } from "../components/ui/Icons";
 
 export default function SignUp() {
   const { register } = useAuth();
@@ -13,7 +18,7 @@ export default function SignUp() {
     email: "",
     password: "",
     phoneNumber: "",
-    location: "",
+    location: "Nairobi, Kenya",
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -43,7 +48,7 @@ export default function SignUp() {
 
     try {
       const backendRole = role === "candidate" ? "job_seeker" : "employer";
-      const data = await register({
+      await register({
         full_name: form.fullName.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
@@ -58,7 +63,7 @@ export default function SignUp() {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.message || "Registration failed. Please check your information.");
+      setError(err.message || "Failed to create account. Please verify your details.");
     } finally {
       setSubmitting(false);
     }
@@ -66,138 +71,181 @@ export default function SignUp() {
 
   return (
     <AuthLayout>
-      <div className="ph-card">
-        <h2 className="ph-card__title">Create your account</h2>
-        <p className="ph-card__desc">
-          Choose how you will use Thibitisha Skills.
-        </p>
-
-        <div className="ph-toggle">
-          <button
-            type="button"
-            className="ph-toggle__btn"
-            aria-pressed={role === "candidate"}
-            onClick={() => setRole("candidate")}
-          >
-            Candidate
-          </button>
-          <button
-            type="button"
-            className="ph-toggle__btn"
-            aria-pressed={role === "recruiter"}
-            onClick={() => setRole("recruiter")}
-          >
-            Recruiter
-          </button>
-        </div>
-
-        <form className="ph-form" onSubmit={onSubmit} noValidate>
-          <div className="ph-field">
-            <label className="ph-label" htmlFor="fullName">
-              Full name
-            </label>
-            <input
-              className="ph-input"
-              id="fullName"
-              name="fullName"
-              type="text"
-              autoComplete="name"
-              placeholder="e.g. Amina Wanjiru"
-              value={form.fullName}
-              onChange={onChange}
-              required
-            />
+      <Card>
+        <CardBody style={{ padding: "var(--space-8)" }}>
+          <div style={{ marginBottom: "var(--space-5)" }}>
+            <h2
+              style={{
+                fontSize: "var(--font-size-2xl)",
+                fontWeight: "var(--font-weight-semibold)",
+                color: "var(--text)",
+                marginBottom: "var(--space-2)",
+              }}
+            >
+              Create your account
+            </h2>
+            <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+              Join the skills verification network for engineers and hiring teams.
+            </p>
           </div>
 
-          <div className="ph-field">
-            <label className="ph-label" htmlFor="email">
-              Email
+          {/* Role Selector */}
+          <div style={{ marginBottom: "var(--space-5)" }}>
+            <label className="tb-label" style={{ marginBottom: "var(--space-2)" }}>
+              I am registering as:
             </label>
-            <input
-              className="ph-input"
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)" }}>
+              <button
+                type="button"
+                onClick={() => setRole("candidate")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: `1px solid ${role === "candidate" ? "var(--accent)" : "var(--border)"}`,
+                  backgroundColor:
+                    role === "candidate" ? "var(--accent-subtle)" : "var(--surface)",
+                  color: role === "candidate" ? "var(--accent)" : "var(--text)",
+                  cursor: "pointer",
+                  fontSize: "var(--font-size-sm)",
+                  fontWeight: role === "candidate" ? "var(--font-weight-semibold)" : "var(--font-weight-medium)",
+                  transition: "all var(--duration-micro) var(--ease-enter)",
+                }}
+              >
+                <IconUser size={16} />
+                <span>Job Seeker</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole("recruiter")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: `1px solid ${role === "recruiter" ? "var(--accent)" : "var(--border)"}`,
+                  backgroundColor:
+                    role === "recruiter" ? "var(--accent-subtle)" : "var(--surface)",
+                  color: role === "recruiter" ? "var(--accent)" : "var(--text)",
+                  cursor: "pointer",
+                  fontSize: "var(--font-size-sm)",
+                  fontWeight: role === "recruiter" ? "var(--font-weight-semibold)" : "var(--font-weight-medium)",
+                  transition: "all var(--duration-micro) var(--ease-enter)",
+                }}
+              >
+                <IconBriefcase size={16} />
+                <span>Employer</span>
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <Alert variant="danger" style={{ marginBottom: "var(--space-4)" }}>
+              {error}
+            </Alert>
+          )}
+
+          <form onSubmit={onSubmit} noValidate>
+            <Input
+              label="Full name"
+              id="fullName"
+              name="fullName"
+              required
+              placeholder={role === "candidate" ? "e.g. Amina Wanjiru" : "e.g. David Kimani"}
+              value={form.fullName}
+              onChange={onChange}
+              disabled={submitting}
+            />
+
+            <Input
+              label="Work or personal email"
               id="email"
               name="email"
               type="email"
               autoComplete="email"
-              placeholder="name@email.com"
+              required
+              placeholder="name@company.com"
               value={form.email}
               onChange={onChange}
-              required
+              disabled={submitting}
             />
-          </div>
 
-          <div className="ph-field">
-            <label className="ph-label" htmlFor="phoneNumber">
-              Phone number (optional)
-            </label>
-            <input
-              className="ph-input"
-              id="phoneNumber"
-              name="phoneNumber"
-              type="tel"
-              autoComplete="tel"
-              placeholder="+254 712 345 678"
-              value={form.phoneNumber}
-              onChange={onChange}
-            />
-          </div>
-
-          <div className="ph-field">
-            <label className="ph-label" htmlFor="location">
-              Location (optional)
-            </label>
-            <input
-              className="ph-input"
-              id="location"
-              name="location"
-              type="text"
-              placeholder="Nairobi, Kenya"
-              value={form.location}
-              onChange={onChange}
-            />
-          </div>
-
-          <div className="ph-field">
-            <label className="ph-label" htmlFor="password">
-              Password
-            </label>
-            <input
-              className="ph-input"
+            <Input
+              label="Password"
               id="password"
               name="password"
               type="password"
               autoComplete="new-password"
-              placeholder="At least 8 characters"
+              required
+              helper="Must be at least 8 characters"
+              placeholder="••••••••"
               value={form.password}
               onChange={onChange}
-              aria-invalid={!!error}
-              required
+              disabled={submitting}
             />
-          </div>
 
-          {error && (
-            <p className="ph-error" role="alert" style={{ marginTop: "12px" }}>
-              {error}
-            </p>
-          )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+              <Input
+                label="Phone (optional)"
+                id="phoneNumber"
+                name="phoneNumber"
+                type="tel"
+                placeholder="+254 700 000 000"
+                value={form.phoneNumber}
+                onChange={onChange}
+                disabled={submitting}
+              />
+              <Input
+                label="Location"
+                id="location"
+                name="location"
+                placeholder="Nairobi, Kenya"
+                value={form.location}
+                onChange={onChange}
+                disabled={submitting}
+              />
+            </div>
 
-          <button
-            className="ph-btn"
-            type="submit"
-            disabled={submitting}
-            style={{ marginTop: "16px" }}
+            <div style={{ marginTop: "var(--space-5)" }}>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={submitting}
+                style={{ width: "100%" }}
+                icon={<IconArrowRight size={16} />}
+              >
+                Create {role === "candidate" ? "Seeker" : "Employer"} Account
+              </Button>
+            </div>
+          </form>
+
+          <div
+            style={{
+              marginTop: "var(--space-5)",
+              paddingTop: "var(--space-5)",
+              borderTop: "1px solid var(--border-subtle)",
+              textAlign: "center",
+              fontSize: "var(--font-size-sm)",
+              color: "var(--text-muted)",
+            }}
           >
-            {submitting ? "Creating account..." : "Create account"}
-          </button>
-        </form>
-
-        <p className="ph-card__foot">
-          Already have an account?{" "}
-          <Link className="ph-link" to="/signin">
-            Sign in
-          </Link>
-        </p>
-      </div>
+            Already have an account?{" "}
+            <Link
+              to="/signin"
+              style={{
+                color: "var(--accent)",
+                fontWeight: "var(--font-weight-medium)",
+              }}
+            >
+              Sign in
+            </Link>
+          </div>
+        </CardBody>
+      </Card>
     </AuthLayout>
   );
 }

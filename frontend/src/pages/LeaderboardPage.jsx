@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
-import Navbar from "../components/Navbar";
+import { useEffect, useState, useMemo } from "react";
+import AppShell from "../components/layout/AppShell";
 import leaderboardApi from "../api/leaderboard";
 import skillsApi from "../api/skills";
-import "../styles/dashboard.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
+import DataTable from "../components/ui/DataTable";
+import Select from "../components/ui/Select";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import StatTile from "../components/ui/StatTile";
+import { IconAward, IconShield, IconSparkles } from "../components/ui/Icons";
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState([]);
@@ -45,137 +51,212 @@ export default function LeaderboardPage() {
     loadLeaderboard(selectedSkillId);
   }, [selectedSkillId]);
 
-  return (
-    <div className="ph-dash">
-      <Navbar />
-
-      <main className="ph-dash__main">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", flexWrap: "wrap", gap: "16px" }}>
-          <div>
-            <h1 className="ph-dash__title">Verified Skills Leaderboard</h1>
-            <p className="ph-dash__sub">
-              Top candidates ranked by objective, AI-evaluated technical assessments.
-            </p>
-          </div>
-
-          <div>
-            <select
-              value={selectedSkillId}
-              onChange={(e) => setSelectedSkillId(e.target.value)}
+  const columns = useMemo(
+    () => [
+      {
+        key: "rank",
+        label: "Rank",
+        sortable: true,
+        numeric: true,
+        align: "center",
+        render: (_, row, idx) => {
+          const rank = row.rank || idx + 1;
+          const isTop3 = rank <= 3;
+          return (
+            <span
               style={{
-                padding: "8px 14px",
-                borderRadius: "8px",
-                border: "1px solid #d4d4d4",
-                background: "#fff",
-                fontSize: "14px",
-                color: "#1a1a1a",
-                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "24px",
+                height: "24px",
+                borderRadius: "var(--radius-sm)",
+                backgroundColor: isTop3 ? "var(--accent)" : "var(--surface-sunken)",
+                color: isTop3 ? "var(--accent-contrast)" : "var(--text-muted)",
+                fontWeight: "var(--font-weight-semibold)",
+                fontSize: "var(--font-size-xs)",
+                fontFamily: "var(--font-mono)",
               }}
             >
-              <option value="">All Technical Skills</option>
-              {skills.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.category})
-                </option>
-              ))}
-            </select>
+              #{rank}
+            </span>
+          );
+        },
+      },
+      {
+        key: "full_name",
+        label: "Candidate",
+        sortable: true,
+        render: (name, row) => (
+          <div>
+            <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+              {name || "Verified Candidate"}
+            </strong>
+            {row.bio && (
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--text-faint)",
+                  maxWidth: "240px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {row.bio}
+              </span>
+            )}
           </div>
+        ),
+      },
+      {
+        key: "location",
+        label: "Location",
+        render: (loc) => (
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+            {loc || "Nairobi, Kenya"}
+          </span>
+        ),
+      },
+      {
+        key: "skill_name",
+        label: "Technical Skill",
+        sortable: true,
+        render: (skillName, row) => (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontWeight: "var(--font-weight-medium)", color: "var(--accent)" }}>
+              {skillName}
+            </span>
+            {row.category && (
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-faint)" }}>
+                ({row.category})
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "score",
+        label: "Verified Score",
+        sortable: true,
+        numeric: true,
+        align: "right",
+        render: (score) => (
+          <span
+            className="tabular-nums"
+            style={{
+              fontWeight: "var(--font-weight-semibold)",
+              color: "var(--text)",
+              fontSize: "var(--font-size-sm)",
+            }}
+          >
+            {Math.round(score)}%
+          </span>
+        ),
+      },
+      {
+        key: "verification_level",
+        label: "Standard",
+        render: (level) => (
+          <Badge variant="success" dot>
+            {level || "Verified"}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
+
+  return (
+    <AppShell>
+      {/* Editorial Title & Filter */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          marginBottom: "var(--space-8)",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "3px 10px",
+              borderRadius: "var(--radius-pill)",
+              backgroundColor: "var(--accent-subtle)",
+              color: "var(--accent)",
+              fontSize: "var(--font-size-xs)",
+              fontWeight: "var(--font-weight-medium)",
+              marginBottom: "var(--space-2)",
+              border: "1px solid var(--accent-subtle-border)",
+            }}
+          >
+            <IconSparkles size={13} /> Objective Evaluation
+          </div>
+
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-semibold)",
+              letterSpacing: "var(--tracking-tighter)",
+              color: "var(--text)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Verified Skills Leaderboard
+          </h1>
+          <p style={{ fontSize: "var(--font-size-base)", color: "var(--text-muted)", maxWidth: "620px" }}>
+            Top candidates ranked strictly by objective, AI-proctored technical evaluations and
+            verified code challenges.
+          </p>
         </div>
 
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
-            {error}
-          </div>
-        )}
-
-        <div className="ph-table-card">
-          {loading ? (
-            <div style={{ textAlign: "center", padding: "48px 0", color: "#666" }}>
-              <p>Loading candidate rankings...</p>
-            </div>
-          ) : entries.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "48px 0", color: "#666" }}>
-              <p style={{ margin: 0, fontSize: "16px" }}>No verified scores recorded for this skill yet.</p>
-              <p style={{ fontSize: "13px", color: "#888", marginTop: "4px" }}>
-                Be the first to complete the assessment and claim the top ranking!
-              </p>
-            </div>
-          ) : (
-            <table className="ph-table">
-              <thead>
-                <tr>
-                  <th style={{ width: "80px" }}>Rank</th>
-                  <th>Candidate</th>
-                  <th>Location</th>
-                  <th>Skill</th>
-                  <th>Verified Score</th>
-                  <th>Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry, idx) => {
-                  const rank = entry.rank || idx + 1;
-                  const isTop3 = rank <= 3;
-                  return (
-                    <tr key={`${entry.candidate_id}-${entry.skill_id}-${idx}`}>
-                      <td>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "28px",
-                            height: "28px",
-                            borderRadius: "50%",
-                            background:
-                              rank === 1 ? "#ffd700" : rank === 2 ? "#c0c0c0" : rank === 3 ? "#cd7f32" : "#f0f0f0",
-                            color: isTop3 ? "#000" : "#555",
-                            fontWeight: "700",
-                            fontSize: "12px",
-                          }}
-                        >
-                          #{rank}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{entry.full_name}</strong>
-                      </td>
-                      <td style={{ color: "#666" }}>{entry.location || "Kenya"}</td>
-                      <td>
-                        <span style={{ fontWeight: "500", color: "#1a5fa6" }}>
-                          {entry.skill_name}
-                        </span>
-                        <span style={{ fontSize: "12px", color: "#888", marginLeft: "6px" }}>
-                          ({entry.category})
-                        </span>
-                      </td>
-                      <td>
-                        <strong style={{ fontSize: "15px" }}>{Math.round(entry.score)}%</strong>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: "3px 8px",
-                            borderRadius: "10px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            background: "#e3f1d9",
-                            color: "#2c5a14",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {entry.verification_level || "Verified"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        {/* Skill Filter Dropdown */}
+        <div style={{ minWidth: "220px" }}>
+          <label className="tb-label" htmlFor="skillFilter" style={{ marginBottom: "var(--space-1)" }}>
+            Filter by Skill
+          </label>
+          <select
+            id="skillFilter"
+            className="tb-select"
+            value={selectedSkillId}
+            onChange={(e) => setSelectedSkillId(e.target.value)}
+          >
+            <option value="">All Technical Skills</option>
+            {skills.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.category})
+              </option>
+            ))}
+          </select>
         </div>
-      </main>
-    </div>
+      </div>
+
+      {error && (
+        <Alert variant="danger" title="Notice" style={{ marginBottom: "var(--space-6)" }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Rankings Data Table */}
+      <Card>
+        <CardBody style={{ padding: 0 }}>
+          <DataTable
+            columns={columns}
+            data={entries}
+            loading={loading}
+            emptyTitle="No verified rankings found"
+            emptyDescription="No candidates have taken assessments for this filter yet. Be the first to earn a verified ranking!"
+            keyExtractor={(item, idx) => `${item.candidate_id || item.user_id}-${item.skill_id}-${idx}`}
+          />
+        </CardBody>
+      </Card>
+    </AppShell>
   );
 }
-

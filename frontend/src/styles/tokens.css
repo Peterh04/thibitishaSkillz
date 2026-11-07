@@ -1,0 +1,241 @@
+/* ==========================================================================
+   Thibitisha Skills Design Tokens (Single Source of Truth)
+   Personality: Calm, Precise, Trustworthy
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------------
+     Typography
+     ------------------------------------------------------------------------ */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Modular Scale (11, 12, 13, 14, 16, 18, 20, 24, 32, 40) */
+  --font-size-xs: 0.6875rem;   /* 11px */
+  --font-size-sm: 0.8125rem;   /* 13px */
+  --font-size-base: 0.875rem;  /* 14px */
+  --font-size-md: 1rem;        /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 2rem;       /* 32px */
+  --font-size-4xl: 2.5rem;     /* 40px */
+
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+
+  --tracking-tighter: -0.03em;
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.04em;
+  --tracking-wider: 0.08em;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* ------------------------------------------------------------------------
+     Spacing Grid (Strict 4px base)
+     ------------------------------------------------------------------------ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --container-max: 1200px;
+  --gutter: var(--space-6);
+
+  /* ------------------------------------------------------------------------
+     Radius System
+     ------------------------------------------------------------------------ */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;      /* Controls: buttons, inputs, selects */
+  --radius-lg: 10px;     /* Containers: cards, modals, sheets */
+  --radius-pill: 9999px; /* Status tags, counter badges */
+
+  /* ------------------------------------------------------------------------
+     Motion & Transitions
+     ------------------------------------------------------------------------ */
+  --duration-micro: 120ms;
+  --duration-standard: 200ms;
+  --duration-large: 320ms;
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 0.2, 1);
+  --press-scale: 0.98;
+
+  /* ------------------------------------------------------------------------
+     Light Theme Palette (Default)
+     Neutral scale tinted with cool slate
+     Accent: Deep precision cobalt (#1e56a0)
+     ------------------------------------------------------------------------ */
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-raised: #f1f3f5;
+  --surface-sunken: #eef1f4;
+  --surface-muted: #f4f6f8;
+
+  --border-subtle: #e9ecef;
+  --border: #dce1e7;
+  --border-hover: #c4ccd6;
+  --border-strong: #9aa5b5;
+
+  --text: #1a1e23;
+  --text-muted: #525a66;
+  --text-faint: #808a98;
+  --text-inverse: #ffffff;
+
+  /* Accent - Cobalt */
+  --accent: #1e56a0;
+  --accent-hover: #16437e;
+  --accent-active: #10325f;
+  --accent-subtle: #edf3fa;
+  --accent-subtle-border: #cfe0f5;
+  --accent-contrast: #ffffff;
+
+  /* Semantic - Success */
+  --color-success: #15803d;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: #bbf7d0;
+
+  /* Semantic - Warning */
+  --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+
+  /* Semantic - Danger */
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+
+  /* Semantic - Info */
+  --color-info: #0369a1;
+  --color-info-bg: #f0f9ff;
+  --color-info-border: #bae6fd;
+
+  /* Shadows (Subtle, layered) */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(16, 24, 40, 0.07), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(16, 24, 40, 0.08), 0 4px 6px -4px rgba(16, 24, 40, 0.04);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 3px rgba(30, 86, 160, 0.22);
+  --focus-ring-danger: 0 0 0 3px rgba(185, 28, 28, 0.22);
+}
+
+/* --------------------------------------------------------------------------
+   Dark Theme Palette
+   Explicit toggle [data-theme="dark"] or prefers-color-scheme
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-raised: #1f242c;
+  --surface-sunken: #10141a;
+  --surface-muted: #181d24;
+
+  --border-subtle: #21262d;
+  --border: #30363d;
+  --border-hover: #444c56;
+  --border-strong: #6e7681;
+
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --text-faint: #656d76;
+  --text-inverse: #0d1117;
+
+  /* Accent - Cobalt in Dark */
+  --accent: #4489e4;
+  --accent-hover: #589bf0;
+  --accent-active: #3373cc;
+  --accent-subtle: rgba(68, 137, 228, 0.12);
+  --accent-subtle-border: rgba(68, 137, 228, 0.28);
+  --accent-contrast: #ffffff;
+
+  /* Semantic in Dark */
+  --color-success: #4ade80;
+  --color-success-bg: rgba(74, 222, 128, 0.12);
+  --color-success-border: rgba(74, 222, 128, 0.28);
+
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.12);
+  --color-warning-border: rgba(251, 191, 36, 0.28);
+
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(248, 113, 113, 0.12);
+  --color-danger-border: rgba(248, 113, 113, 0.28);
+
+  --color-info: #38bdf8;
+  --color-info-bg: rgba(56, 189, 248, 0.12);
+  --color-info-border: rgba(56, 189, 248, 0.28);
+
+  /* Shadows in Dark */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+
+  --focus-ring: 0 0 0 3px rgba(68, 137, 228, 0.35);
+  --focus-ring-danger: 0 0 0 3px rgba(248, 113, 113, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-raised: #1f242c;
+    --surface-sunken: #10141a;
+    --surface-muted: #181d24;
+
+    --border-subtle: #21262d;
+    --border: #30363d;
+    --border-hover: #444c56;
+    --border-strong: #6e7681;
+
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --text-faint: #656d76;
+    --text-inverse: #0d1117;
+
+    --accent: #4489e4;
+    --accent-hover: #589bf0;
+    --accent-active: #3373cc;
+    --accent-subtle: rgba(68, 137, 228, 0.12);
+    --accent-subtle-border: rgba(68, 137, 228, 0.28);
+    --accent-contrast: #ffffff;
+
+    --color-success: #4ade80;
+    --color-success-bg: rgba(74, 222, 128, 0.12);
+    --color-success-border: rgba(74, 222, 128, 0.28);
+
+    --color-warning: #fbbf24;
+    --color-warning-bg: rgba(251, 191, 36, 0.12);
+    --color-warning-border: rgba(251, 191, 36, 0.28);
+
+    --color-danger: #f87171;
+    --color-danger-bg: rgba(248, 113, 113, 0.12);
+    --color-danger-border: rgba(248, 113, 113, 0.28);
+
+    --color-info: #38bdf8;
+    --color-info-bg: rgba(56, 189, 248, 0.12);
+    --color-info-border: rgba(56, 189, 248, 0.28);
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+
+    --focus-ring: 0 0 0 3px rgba(68, 137, 228, 0.35);
+    --focus-ring-danger: 0 0 0 3px rgba(248, 113, 113, 0.35);
+  }
+}
+

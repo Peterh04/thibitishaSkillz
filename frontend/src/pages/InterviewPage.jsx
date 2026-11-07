@@ -1,9 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import AppShell from "../components/layout/AppShell";
 import { useAuth } from "../context/AuthContext";
 import voiceInterviewsApi from "../api/voiceInterviews";
-import "../styles/interview.css";
+import Card, { CardBody, CardHeader, CardTitle, CardDescription, CardFooter } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Textarea from "../components/ui/Textarea";
+import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
+import Skeleton from "../components/ui/Skeleton";
+import {
+  IconMic,
+  IconMicOff,
+  IconVolume2,
+  IconClock,
+  IconCheckCircle,
+  IconArrowRight,
+  IconSparkles,
+  IconBriefcase,
+} from "../components/ui/Icons";
 
 const formatTime = (s) => {
   const m = String(Math.floor(s / 60)).padStart(2, "0");
@@ -11,27 +26,23 @@ const formatTime = (s) => {
   return `${m}:${r}`;
 };
 
-// Generates a simple silent/mock WAV blob if the browser environment lacks a physical mic
 function createSilentWavBlob(durationSeconds = 1) {
   const sampleRate = 16000;
   const numSamples = sampleRate * durationSeconds;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
 
-  // RIFF identifier
   view.setUint32(0, 0x52494646, false); // "RIFF"
   view.setUint32(4, 36 + numSamples * 2, true);
   view.setUint32(8, 0x57415645, false); // "WAVE"
-  // format chunk
   view.setUint32(12, 0x666d7420, false); // "fmt "
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // 1 channel
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true); // 16 bits
-  // data chunk
+  view.setUint16(34, 16, true);
   view.setUint32(36, 0x64617461, false); // "data"
   view.setUint32(40, numSamples * 2, true);
 
@@ -48,7 +59,6 @@ export default function InterviewPage() {
   const [interview, setInterview] = useState(null);
   const [currentTurn, setCurrentTurn] = useState(null);
 
-  // Voice recording & transcription state
   const [isRecording, setIsRecording] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [recordedBlob, setRecordedBlob] = useState(null);
@@ -58,9 +68,7 @@ export default function InterviewPage() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const speechRecognitionRef = useRef(null);
-  const audioPlayerRef = useRef(null);
 
-  // Initialize or load interview
   useEffect(() => {
     async function initInterview() {
       if (!isAuthenticated || !isJobSeeker) {
@@ -75,7 +83,6 @@ export default function InterviewPage() {
         let activeId = interviewId ? parseInt(interviewId, 10) : null;
 
         if (!activeId) {
-          // Check if candidate already has an in-progress interview
           const mine = await voiceInterviewsApi.getMyInterviews();
           const inProgress = mine.find((i) => i.status === "in_progress" || i.status === "pending");
           if (inProgress) {
@@ -83,7 +90,6 @@ export default function InterviewPage() {
           } else if (mine.length > 0) {
             activeId = mine[0].id;
           } else {
-            // Start a new voice interview session
             const created = await voiceInterviewsApi.startInterview({ language: "en" });
             activeId = created.id;
           }
@@ -111,7 +117,6 @@ export default function InterviewPage() {
     initInterview();
   }, [interviewId, isAuthenticated, isJobSeeker]);
 
-  // Turn timer
   useEffect(() => {
     if (!currentTurn || interview?.status === "completed") return;
 
@@ -129,7 +134,6 @@ export default function InterviewPage() {
     return () => clearInterval(timer);
   }, [currentTurn, interview]);
 
-  // Clean up media streams and recognition on unmount
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -144,11 +148,9 @@ export default function InterviewPage() {
   const handleHearQuestion = () => {
     if (!currentTurn || !interview) return;
 
-    // First try MsingiAI audio stream if available
     const audioUrl = voiceInterviewsApi.getQuestionAudioUrl(interview.id, currentTurn.turn_index);
     const audio = new Audio(audioUrl);
     audio.play().catch(() => {
-      // Fallback to browser SpeechSynthesis
       if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(currentTurn.question_text);
@@ -163,7 +165,6 @@ export default function InterviewPage() {
     setLiveTranscript("");
     setRecordedBlob(null);
 
-    // 1. Setup Web Speech API for live transcription preview
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SR) {
       try {
@@ -183,7 +184,6 @@ export default function InterviewPage() {
       }
     }
 
-    // 2. Setup MediaRecorder for actual audio stream
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -206,10 +206,8 @@ export default function InterviewPage() {
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
     } catch (micErr) {
-      console.warn("Microphone access not available:", micErr.message);
-      // Fallback: indicate manual simulation mode
       setIsRecording(true);
-      setError("Microphone not detected or permission denied. Type your answer below and click Submit.");
+      setError("Microphone permission denied or device not detected. You can type your response below.");
     }
   };
 
@@ -233,9 +231,7 @@ export default function InterviewPage() {
     }
 
     try {
-      // Use recorded audio blob if available, or create a mock WAV
       const audioToSubmit = recordedBlob || createSilentWavBlob(2);
-
       const updated = await voiceInterviewsApi.submitTurnAnswer(interview.id, audioToSubmit);
       setInterview(updated);
       setLiveTranscript("");
@@ -255,264 +251,305 @@ export default function InterviewPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="ph-iv">
-        <Navbar />
-        <main className="ph-iv__main" style={{ textAlign: "center", padding: "60px 0" }}>
-          <p>Connecting to AI voice interviewer...</p>
-        </main>
-      </div>
-    );
-  }
-
   const turnIndex = currentTurn ? currentTurn.turn_index : 1;
   const totalTurns = interview?.total_questions || 3;
   const progressPercent = ((turnIndex - 1) / totalTurns) * 100;
 
   return (
-    <div className="ph-iv">
-      <Navbar />
-
-      <main className="ph-iv__main">
-        {/* Top Status */}
-        {interview?.status !== "completed" && currentTurn && (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "600", color: "#1a5fa6" }}>
-                AI Voice Interview · Question {turnIndex} of {totalTurns}
-              </div>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  background: secondsLeft <= 20 ? "#fee4e2" : "#f0f4f8",
-                  color: secondsLeft <= 20 ? "#b42318" : "#1a5fa6",
-                }}
-              >
-                ⏱ {formatTime(secondsLeft)}
-              </div>
-            </div>
-
-            <div
-              className="ph-iv__progress"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={totalTurns}
-              aria-valuenow={turnIndex - 1}
-            >
-              <div
-                className="ph-iv__progress-fill"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </>
-        )}
-
-        {/* Error message */}
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef3f2", border: "1px solid #fee4e2", borderRadius: "8px", color: "#b42318", marginBottom: "20px", fontSize: "14px" }}>
-            {error}
-          </div>
-        )}
-
-        {/* ACTIVE QUESTION TURN */}
-        {interview?.status !== "completed" && currentTurn ? (
-          <div>
-            <section className="ph-iv__card">
-              <p className="ph-iv__card-label">Spoken Technical Question</p>
-              <h1 className="ph-iv__question" style={{ fontSize: "22px", lineHeight: "1.4" }}>
-                {currentTurn.question_text}
-              </h1>
-
-              {currentTurn.question_text_sw && (
-                <p style={{ fontSize: "14px", color: "#666", fontStyle: "italic", margin: "8px 0 16px" }}>
-                  Swahili: {currentTurn.question_text_sw}
-                </p>
-              )}
-
-              <button className="ph-iv__hear" type="button" onClick={handleHearQuestion}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                </svg>
-                Listen (TTS)
-              </button>
-            </section>
-
-            <label className="ph-iv__label" htmlFor="answer" style={{ marginTop: "24px" }}>
-              Your Spoken Response
-            </label>
-            <textarea
-              className="ph-iv__textarea"
-              id="answer"
-              placeholder={isRecording ? "Listening to your voice..." : "Click the microphone button to speak or type your answer"}
-              value={liveTranscript}
-              onChange={(e) => setLiveTranscript(e.target.value)}
-            />
-
-            <div className="ph-iv__actions">
-              <button
-                className={"ph-iv__mic" + (isRecording ? " ph-iv__mic--on" : "")}
-                type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                aria-label={isRecording ? "Stop recording" : "Start speaking"}
-                title={isRecording ? "Stop recording" : "Record voice answer"}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="9" y="2" width="6" height="12" rx="3" />
-                  <path d="M5 11a7 7 0 0 0 14 0" />
-                  <line x1="12" y1="18" x2="12" y2="22" />
-                </svg>
-              </button>
-
-              <button
-                className="ph-iv__submit"
-                type="button"
-                onClick={handleSubmitAnswer}
-                disabled={submitting}
-              >
-                {submitting ? "Analyzing Audio with Gemini..." : "Submit Answer"}
-              </button>
-            </div>
-
-            <p className="ph-iv__note">
-              Answers are transcribed via MsingiAI and evaluated for technical depth and clarity by Gemini AI.
-            </p>
-          </div>
+    <AppShell>
+      <div style={{ maxWidth: "780px", margin: "0 auto" }}>
+        {loading ? (
+          <Card>
+            <CardBody style={{ padding: "var(--space-10)", textAlign: "center" }}>
+              <Skeleton height="32px" width="50%" style={{ margin: "0 auto var(--space-4)" }} />
+              <Skeleton height="16px" width="70%" style={{ margin: "0 auto var(--space-6)" }} />
+              <Skeleton height="120px" width="100%" />
+            </CardBody>
+          </Card>
         ) : (
-          /* INTERVIEW COMPLETED REPORT */
-          <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div
-              style={{
-                width: "72px",
-                height: "72px",
-                borderRadius: "50%",
-                background: "#e3f1d9",
-                color: "#2c5a14",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "32px",
-                margin: "0 auto 16px",
-                fontWeight: "bold",
-              }}
-            >
-              ✓
-            </div>
+          <>
+            {/* Header & Progress when interview is active */}
+            {interview?.status !== "completed" && currentTurn && (
+              <div style={{ marginBottom: "var(--space-6)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "var(--space-3)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <Badge variant="accent">
+                      Question {turnIndex} of {totalTurns}
+                    </Badge>
+                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                      AI Conversational Evaluation
+                    </span>
+                  </div>
 
-            <h1 style={{ fontSize: "28px", margin: "0 0 8px", fontWeight: "700" }}>
-              Voice Interview Complete
-            </h1>
-            <p style={{ color: "#666", fontSize: "15px", margin: "0 0 24px" }}>
-              Your technical discussion has been transcribed and verified.
-            </p>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "3px 10px",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: secondsLeft <= 20 ? "var(--color-danger-bg)" : "var(--surface-sunken)",
+                      color: secondsLeft <= 20 ? "var(--color-danger)" : "var(--text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--font-size-sm)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      border: `1px solid ${secondsLeft <= 20 ? "var(--color-danger-border)" : "var(--border-subtle)"}`,
+                    }}
+                  >
+                    <IconClock size={15} />
+                    <span className="tabular-nums">{formatTime(secondsLeft)}</span>
+                  </div>
+                </div>
 
-            {/* Scorecard */}
-            <div style={{ display: "flex", justifyContent: "center", gap: "24px", marginBottom: "32px" }}>
-              <div style={{ background: "#fff", border: "1px solid #e8e8e6", padding: "16px 28px", borderRadius: "8px" }}>
-                <p style={{ margin: "0 0 4px", fontSize: "12px", color: "#666", textTransform: "uppercase" }}>Overall Score</p>
-                <p style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#1a5fa6" }}>
-                  {interview?.percentage != null ? `${Math.round(interview.percentage)}%` : `${interview?.score || 0} pts`}
-                </p>
-              </div>
-            </div>
-
-            {interview?.summary && (
-              <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: "8px", padding: "20px", textAlign: "left", maxWidth: "600px", margin: "0 auto 32px" }}>
-                <h3 style={{ margin: "0 0 8px", fontSize: "15px", color: "#1a1a1a" }}>AI Evaluator Feedback:</h3>
-                <p style={{ margin: 0, fontSize: "14px", color: "#444", lineHeight: "1.6" }}>
-                  {interview.summary}
-                </p>
-              </div>
-            )}
-
-            {/* Turn History */}
-            {interview?.turns && interview.turns.length > 0 && (
-              <div style={{ textAlign: "left", maxWidth: "600px", margin: "0 auto 32px" }}>
-                <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>Question Breakdown</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {interview.turns.map((t) => (
-                    <div key={t.id} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: "8px", padding: "14px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ fontWeight: "600", fontSize: "13px" }}>Question {t.turn_index}</span>
-                        <span style={{ fontSize: "12px", color: "#2c5a14", fontWeight: "600" }}>
-                          {t.awarded_marks || 0} / {t.max_marks || 3} marks
-                        </span>
-                      </div>
-                      <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#333" }}>{t.question_text}</p>
-                      {t.transcript && (
-                        <p style={{ margin: "0 0 4px", fontSize: "12px", color: "#555", fontStyle: "italic" }}>
-                          <strong>Transcript:</strong> "{t.transcript}"
-                        </p>
-                      )}
-                      {t.feedback && (
-                        <p style={{ margin: 0, fontSize: "12px", color: "#1a5fa6" }}>
-                          <strong>Feedback:</strong> {t.feedback}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                <div
+                  style={{
+                    height: "4px",
+                    backgroundColor: "var(--surface-sunken)",
+                    borderRadius: "var(--radius-pill)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${progressPercent}%`,
+                      height: "100%",
+                      backgroundColor: "var(--accent)",
+                      transition: "width var(--duration-standard) var(--ease-enter)",
+                    }}
+                  />
                 </div>
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-              <Link
-                to="/dashboard"
-                style={{
-                  padding: "10px 20px",
-                  background: "#1a5fa6",
-                  color: "#fff",
-                  borderRadius: "6px",
-                  textDecoration: "none",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                }}
-              >
-                Back to Dashboard
-              </Link>
-              <Link
-                to="/"
-                style={{
-                  padding: "10px 20px",
-                  background: "#fff",
-                  border: "1px solid #d4d4d4",
-                  color: "#333",
-                  borderRadius: "6px",
-                  textDecoration: "none",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                }}
-              >
-                Browse More Jobs
-              </Link>
-            </div>
-          </div>
+            {error && (
+              <Alert variant="danger" onDismiss={() => setError("")} style={{ marginBottom: "var(--space-5)" }}>
+                {error}
+              </Alert>
+            )}
+
+            {/* ACTIVE TURN CARD */}
+            {interview?.status !== "completed" && currentTurn ? (
+              <Card>
+                <CardHeader>
+                  <div>
+                    <CardTitle>Spoken Technical Question</CardTitle>
+                    <CardDescription>
+                      Listen to the interviewer and respond with your technical approach and tradeoffs.
+                    </CardDescription>
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<IconVolume2 size={14} />}
+                    onClick={handleHearQuestion}
+                  >
+                    Listen (TTS)
+                  </Button>
+                </CardHeader>
+
+                <CardBody style={{ padding: "var(--space-8)" }}>
+                  <h2
+                    style={{
+                      fontSize: "var(--font-size-xl)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      lineHeight: "var(--line-height-snug)",
+                      color: "var(--text)",
+                      marginBottom: "var(--space-4)",
+                    }}
+                  >
+                    {currentTurn.question_text}
+                  </h2>
+
+                  {currentTurn.question_text_sw && (
+                    <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", fontStyle: "italic", marginBottom: "var(--space-6)" }}>
+                      Swahili translation: {currentTurn.question_text_sw}
+                    </p>
+                  )}
+
+                  <div style={{ marginTop: "var(--space-6)" }}>
+                    <label className="tb-label" htmlFor="response" style={{ marginBottom: "var(--space-2)" }}>
+                      Your Spoken / Transcribed Response
+                    </label>
+                    <Textarea
+                      id="response"
+                      placeholder={
+                        isRecording
+                          ? "Listening to your voice through the microphone..."
+                          : "Click the microphone button to speak your answer, or type directly here..."
+                      }
+                      value={liveTranscript}
+                      onChange={(e) => setLiveTranscript(e.target.value)}
+                      rows={5}
+                    />
+                  </div>
+                </CardBody>
+
+                <CardFooter style={{ justifyContent: "space-between" }}>
+                  <Button
+                    variant={isRecording ? "danger" : "secondary"}
+                    size="md"
+                    icon={isRecording ? <IconMicOff size={16} /> : <IconMic size={16} />}
+                    onClick={isRecording ? stopRecording : startRecording}
+                  >
+                    {isRecording ? "Stop Recording" : "Record Voice Answer"}
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    size="md"
+                    loading={submitting}
+                    onClick={handleSubmitAnswer}
+                    icon={<IconArrowRight size={15} />}
+                  >
+                    {submitting ? "Analyzing Audio with Gemini..." : "Submit Answer"}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ) : (
+              /* COMPLETED REPORT */
+              <Card style={{ textAlign: "center" }}>
+                <CardBody style={{ padding: "var(--space-10)" }}>
+                  <div
+                    style={{
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--color-success-bg)",
+                      color: "var(--color-success)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto var(--space-4)",
+                    }}
+                  >
+                    <IconCheckCircle size={32} />
+                  </div>
+
+                  <h1
+                    style={{
+                      fontSize: "var(--font-size-2xl)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      color: "var(--text)",
+                      marginBottom: "var(--space-2)",
+                    }}
+                  >
+                    Voice Interview Complete
+                  </h1>
+                  <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginBottom: "var(--space-6)" }}>
+                    Your conversational answers have been evaluated for technical depth and clarity.
+                  </p>
+
+                  <div
+                    style={{
+                      display: "inline-block",
+                      backgroundColor: "var(--surface-raised)",
+                      padding: "var(--space-4) var(--space-8)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-subtle)",
+                      marginBottom: "var(--space-6)",
+                    }}
+                  >
+                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
+                      Overall Interview Score
+                    </span>
+                    <span
+                      className="tabular-nums"
+                      style={{ fontSize: "var(--font-size-3xl)", fontWeight: "var(--font-weight-semibold)", color: "var(--accent)" }}
+                    >
+                      {interview?.percentage != null ? `${Math.round(interview.percentage)}%` : `${interview?.score || 0} pts`}
+                    </span>
+                  </div>
+
+                  {interview?.summary && (
+                    <div
+                      style={{
+                        backgroundColor: "var(--surface-raised)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "var(--space-5)",
+                        textAlign: "left",
+                        marginBottom: "var(--space-6)",
+                      }}
+                    >
+                      <h4 style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", marginBottom: "var(--space-2)" }}>
+                        AI Evaluator Feedback:
+                      </h4>
+                      <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text)", margin: 0, lineHeight: "var(--line-height-relaxed)" }}>
+                        {interview.summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Question Turns Breakdown */}
+                  {interview?.turns && interview.turns.length > 0 && (
+                    <div style={{ textAlign: "left", marginBottom: "var(--space-6)" }}>
+                      <h4 style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", marginBottom: "var(--space-3)" }}>
+                        Spoken Responses Breakdown
+                      </h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                        {interview.turns.map((t) => (
+                          <div
+                            key={t.id}
+                            style={{
+                              backgroundColor: "var(--surface)",
+                              border: "1px solid var(--border-subtle)",
+                              borderRadius: "var(--radius-md)",
+                              padding: "var(--space-4)",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-1)" }}>
+                              <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--text)" }}>
+                                Question {t.turn_index}
+                              </strong>
+                              <Badge variant="accent">
+                                {t.awarded_marks || 0} / {t.max_marks || 3} marks
+                              </Badge>
+                            </div>
+                            <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: "4px 0" }}>
+                              {t.question_text}
+                            </p>
+                            {t.transcript && (
+                              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text)", fontStyle: "italic", margin: "4px 0" }}>
+                                &ldquo;{t.transcript}&rdquo;
+                              </p>
+                            )}
+                            {t.feedback && (
+                              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--accent)", margin: "4px 0 0" }}>
+                                <strong>Feedback:</strong> {t.feedback}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-3)" }}>
+                    <Link to="/dashboard">
+                      <Button variant="primary" size="md">
+                        Back to Dashboard
+                      </Button>
+                    </Link>
+                    <Link to="/jobs">
+                      <Button variant="secondary" size="md">
+                        Browse Open Jobs
+                      </Button>
+                    </Link>
+                  </div>
+                </CardBody>
+              </Card>
+            )}
+          </>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

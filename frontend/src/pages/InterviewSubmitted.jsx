@@ -1,117 +1,107 @@
-import "../styles/submitted.css";
+import { Link } from "react-router-dom";
+import AppShell from "../components/layout/AppShell";
+import Card, { CardBody } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import { IconCheckCircle, IconArrowRight, IconBriefcase } from "../components/ui/Icons";
 
-// Replace with data from your API
-const RESULT = {
-  jobTitle: "Junior Data Analyst",
-  company: "Acme Insurance",
-  answered: 8,
-  total: 8,
-  timeTaken: "14 min",
-};
-
-// Adjust these routes to match your router
-const ROUTES = { jobs: "/jobs", profile: "/profile" };
-
-export default function InterviewSubmitted({ result = RESULT }) {
-  const handleSignOut = () => {
-    // TODO: clear session and redirect
-    console.log("sign out");
+export default function InterviewSubmitted({ result }) {
+  const data = result || {
+    jobTitle: "Technical Assessment",
+    company: "Hiring Employer",
+    answered: 5,
+    total: 5,
+    timeTaken: "12 min",
   };
 
   return (
-    <div className="ph-done">
-      <header className="ph-done__bar">
-        <a className="ph-done__logo" href="/">
-          <span className="ph-done__logo-mark" />
-          ProofHire
-        </a>
-        <nav className="ph-done__nav">
-          <a className="ph-done__nav-link" href={ROUTES.jobs}>
-            Open jobs
-          </a>
-          <button
-            className="ph-done__nav-link"
-            type="button"
-            onClick={handleSignOut}
-          >
-            Sign out
-          </button>
-        </nav>
-      </header>
-
-      <main className="ph-done__main">
-        <section className="ph-done__card" role="status">
-          <div className="ph-done__icon" aria-hidden="true">
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+    <AppShell>
+      <div style={{ maxWidth: "580px", margin: "var(--space-8) auto" }}>
+        <Card>
+          <CardBody style={{ padding: "var(--space-10)", textAlign: "center" }}>
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                backgroundColor: "var(--color-success-bg)",
+                color: "var(--color-success)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto var(--space-4)",
+              }}
             >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
+              <IconCheckCircle size={32} />
+            </div>
 
-          <h1 className="ph-done__title">Interview submitted</h1>
-          <p className="ph-done__lead">
-            Thank you for completing your interview for {result.jobTitle} at{" "}
-            {result.company}. Your answers are now with the recruiter.
-          </p>
+            <h1
+              style={{
+                fontSize: "var(--font-size-2xl)",
+                fontWeight: "var(--font-weight-semibold)",
+                color: "var(--text)",
+                marginBottom: "var(--space-2)",
+              }}
+            >
+              Interview Submitted
+            </h1>
+            <p
+              style={{
+                fontSize: "var(--font-size-base)",
+                color: "var(--text-muted)",
+                marginBottom: "var(--space-6)",
+              }}
+            >
+              Your conversational voice answers have been securely recorded and sent to Gemini AI for
+              transcription and technical evaluation.
+            </p>
 
-          <ul className="ph-done__summary">
-            <li className="ph-done__stat">
-              <p className="ph-done__stat-value">
-                {result.answered} of {result.total}
-              </p>
-              <p className="ph-done__stat-label">Questions answered</p>
-            </li>
-            <li className="ph-done__stat">
-              <p className="ph-done__stat-value">{result.timeTaken}</p>
-              <p className="ph-done__stat-label">Time taken</p>
-            </li>
-            <li className="ph-done__stat">
-              <p className="ph-done__stat-value">Submitted</p>
-              <p className="ph-done__stat-label">Status</p>
-            </li>
-          </ul>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "var(--space-4)",
+                padding: "var(--space-4)",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "var(--surface-raised)",
+                border: "1px solid var(--border-subtle)",
+                marginBottom: "var(--space-8)",
+                textAlign: "left",
+              }}
+            >
+              <div>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", display: "block" }}>
+                  Questions Answered
+                </span>
+                <strong className="tabular-nums" style={{ fontSize: "var(--font-size-lg)", color: "var(--text)" }}>
+                  {data.answered} / {data.total}
+                </strong>
+              </div>
 
-          <h2 className="ph-done__steps-title">What happens next</h2>
-          <ol className="ph-done__steps">
-            <li className="ph-done__step">
-              <span className="ph-done__step-num">1</span>
-              <span>We score your answers against the role requirements.</span>
-            </li>
-            <li className="ph-done__step">
-              <span className="ph-done__step-num">2</span>
-              <span>The recruiter reviews your transcript and ranking.</span>
-            </li>
-            <li className="ph-done__step">
-              <span className="ph-done__step-num">3</span>
-              <span>
-                If you are shortlisted, you get an invite to an in-person
-                interview.
-              </span>
-            </li>
-          </ol>
+              <div>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", display: "block" }}>
+                  Completion Status
+                </span>
+                <strong style={{ fontSize: "var(--font-size-sm)", color: "var(--color-success)" }}>
+                  Verified Complete
+                </strong>
+              </div>
+            </div>
 
-          <div className="ph-done__actions">
-            <a className="ph-btn" href={ROUTES.profile}>
-              View my applications
-            </a>
-            <a className="ph-btn ph-btn--ghost" href={ROUTES.jobs}>
-              Browse open jobs
-            </a>
-          </div>
-
-          <p className="ph-done__note">
-            Your interview link has been used and cannot be opened again.
-          </p>
-        </section>
-      </main>
-    </div>
+            <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-3)" }}>
+              <Link to="/dashboard">
+                <Button variant="primary" size="md">
+                  View Candidate Dashboard
+                </Button>
+              </Link>
+              <Link to="/jobs">
+                <Button variant="secondary" size="md" icon={<IconBriefcase size={15} />}>
+                  Browse Open Jobs
+                </Button>
+              </Link>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    </AppShell>
   );
 }

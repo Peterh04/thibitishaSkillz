@@ -1,8 +1,23 @@
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import Button from "./ui/Button";
+import {
+  IconShield,
+  IconSun,
+  IconMoon,
+  IconBriefcase,
+  IconAward,
+  IconUser,
+  IconLayers,
+  IconLogOut,
+  IconPlus,
+} from "./ui/Icons";
 
 export default function Navbar() {
   const { user, isAuthenticated, isEmployer, isJobSeeker, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -18,199 +33,181 @@ export default function Navbar() {
   };
 
   return (
-    <header className="ph-dash__bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "56px", padding: "0 32px", background: "#fff", borderBottom: "1px solid #e8e8e6" }}>
-      <Link
-        to={isEmployer ? "/recruiter" : "/"}
-        style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "18px", fontWeight: "600", color: "#1a1a1a", textDecoration: "none" }}
-      >
-        <span style={{ width: "24px", height: "24px", borderRadius: "6px", background: "#1a5fa6" }} />
-        <span>Thibitisha Skills</span>
-      </Link>
-
-      <nav style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-        {/* Guest links */}
-        {!isAuthenticated && (
-          <>
-            <Link
-              to="/"
-              style={{
-                fontSize: "14px",
-                color: isActive("/") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Open Jobs
-            </Link>
-            <Link
-              to="/leaderboard"
-              style={{
-                fontSize: "14px",
-                color: isActive("/leaderboard") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/leaderboard") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Leaderboard
-            </Link>
-            <Link
-              to="/signin"
-              style={{
-                fontSize: "14px",
-                color: isActive("/signin") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/signin") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Sign in
-            </Link>
-            <Link
-              to="/signup"
-              style={{
-                fontSize: "14px",
-                padding: "6px 14px",
-                background: "#1a5fa6",
-                color: "#fff",
-                borderRadius: "6px",
-                fontWeight: "500",
-                textDecoration: "none",
-              }}
-            >
-              Get started
-            </Link>
-          </>
-        )}
-
-        {/* Candidate links */}
-        {isAuthenticated && isJobSeeker && (
-          <>
-            <Link
-              to="/"
-              style={{
-                fontSize: "14px",
-                color: isActive("/") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Open Jobs
-            </Link>
-            <Link
-              to="/dashboard"
-              style={{
-                fontSize: "14px",
-                color: isActive("/dashboard") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/dashboard") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              My Dashboard
-            </Link>
-            <Link
-              to="/assessments"
-              style={{
-                fontSize: "14px",
-                color: isActive("/assessments") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/assessments") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Skills & Tests
-            </Link>
-            <Link
-              to="/leaderboard"
-              style={{
-                fontSize: "14px",
-                color: isActive("/leaderboard") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/leaderboard") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Leaderboard
-            </Link>
-          </>
-        )}
-
-        {/* Employer links */}
-        {isAuthenticated && isEmployer && (
-          <>
-            <Link
-              to="/recruiter"
-              style={{
-                fontSize: "14px",
-                color: isActive("/recruiter") && location.pathname === "/recruiter" ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/recruiter") && location.pathname === "/recruiter" ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Overview
-            </Link>
-            <Link
-              to="/recruiter/jobs"
-              style={{
-                fontSize: "14px",
-                color: isActive("/recruiter/jobs") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/recruiter/jobs") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Posted Jobs
-            </Link>
-            <Link
-              to="/recruiter/jobs/new"
-              style={{
-                fontSize: "14px",
-                padding: "6px 12px",
-                background: "#1a5fa6",
-                color: "#fff",
-                borderRadius: "6px",
-                fontWeight: "500",
-                textDecoration: "none",
-              }}
-            >
-              + Post Job
-            </Link>
-            <Link
-              to="/leaderboard"
-              style={{
-                fontSize: "14px",
-                color: isActive("/leaderboard") ? "#1a5fa6" : "#555",
-                fontWeight: isActive("/leaderboard") ? "600" : "400",
-                textDecoration: "none",
-              }}
-            >
-              Leaderboard
-            </Link>
-          </>
-        )}
-
-        {/* Authenticated user pill + signout */}
-        {isAuthenticated && (
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginLeft: "12px", borderLeft: "1px solid #e8e8e6", paddingLeft: "16px" }}>
-            <span style={{ fontSize: "13px", color: "#666" }}>
-              <strong>{user.full_name}</strong>{" "}
-              <span style={{ fontSize: "11px", padding: "2px 6px", background: isEmployer ? "#eef4fa" : "#e3f1d9", color: isEmployer ? "#1a5fa6" : "#2c5a14", borderRadius: "10px", textTransform: "capitalize" }}>
-                {user.role === "job_seeker" ? "Candidate" : user.role}
-              </span>
+    <header className="tb-header" style={{ width: "100%", marginBottom: "var(--space-6)" }}>
+      <div className="tb-container tb-header__inner">
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+          <Link to={isEmployer ? "/recruiter" : "/"} className="tb-brand">
+            <span className="tb-brand__mark">
+              <IconShield size={15} />
             </span>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "#777",
-                cursor: "pointer",
-                fontSize: "13px",
-                textDecoration: "underline",
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-        )}
-      </nav>
+            <span className="tb-brand__text">
+              Thibitisha Skills
+              <span className="tb-brand__badge">Verified</span>
+            </span>
+          </Link>
+
+          <nav className="tb-nav" style={{ display: "none" }} data-desktop-nav>
+            {!isAuthenticated ? (
+              <>
+                <Link
+                  to="/"
+                  className={`tb-nav-link ${location.pathname === "/" ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconBriefcase size={16} /> Open Jobs
+                </Link>
+                <Link
+                  to="/leaderboard"
+                  className={`tb-nav-link ${isActive("/leaderboard") ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconAward size={16} /> Leaderboard
+                </Link>
+              </>
+            ) : isJobSeeker ? (
+              <>
+                <Link
+                  to="/"
+                  className={`tb-nav-link ${location.pathname === "/" ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconBriefcase size={16} /> Open Jobs
+                </Link>
+                <Link
+                  to="/dashboard"
+                  className={`tb-nav-link ${isActive("/dashboard") ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconLayers size={16} /> Dashboard
+                </Link>
+                <Link
+                  to="/assessments"
+                  className={`tb-nav-link ${isActive("/assessments") ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconAward size={16} /> Assessments
+                </Link>
+                <Link
+                  to="/interview"
+                  className={`tb-nav-link ${isActive("/interview") ? "tb-nav-link--active" : ""}`}
+                >
+                  Voice Interview
+                </Link>
+                <Link
+                  to="/leaderboard"
+                  className={`tb-nav-link ${isActive("/leaderboard") ? "tb-nav-link--active" : ""}`}
+                >
+                  Leaderboard
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/recruiter"
+                  className={`tb-nav-link ${location.pathname === "/recruiter" ? "tb-nav-link--active" : ""}`}
+                >
+                  Overview
+                </Link>
+                <Link
+                  to="/recruiter/jobs"
+                  className={`tb-nav-link ${isActive("/recruiter/jobs") && location.pathname !== "/recruiter/jobs/new" ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconBriefcase size={16} /> Manage Jobs
+                </Link>
+                <Link
+                  to="/recruiter/shortlisted"
+                  className={`tb-nav-link ${isActive("/recruiter/shortlisted") || isActive("/shortlisted") ? "tb-nav-link--active" : ""}`}
+                >
+                  <IconUser size={16} /> Candidates
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="tb-btn tb-btn--ghost tb-btn--sm tb-btn--icon-only"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
+          </button>
+
+          {!isAuthenticated ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              <Link to="/signin">
+                <Button variant="ghost" size="sm">
+                  Sign in
+                </Button>
+              </Link>
+              <Link to="/signup">
+                <Button variant="primary" size="sm">
+                  Get started
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              {isEmployer && (
+                <Link to="/recruiter/jobs/new">
+                  <Button variant="primary" size="sm" icon={<IconPlus size={14} />}>
+                    Post Job
+                  </Button>
+                </Link>
+              )}
+              <Link
+                to={isEmployer ? "/recruiter" : "/profile"}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 8px",
+                  borderRadius: "var(--radius-md)",
+                  backgroundColor: "var(--surface-sunken)",
+                  color: "var(--text)",
+                  fontSize: "var(--font-size-xs)",
+                  fontWeight: "var(--font-weight-medium)",
+                }}
+              >
+                <span
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    borderRadius: "50%",
+                    backgroundColor: "var(--accent-subtle)",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: "600",
+                  }}
+                >
+                  {user?.full_name ? user.full_name[0].toUpperCase() : "U"}
+                </span>
+                <span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user?.full_name || user?.email || "Account"}
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                title="Sign out"
+                aria-label="Sign out"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-faint)",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <IconLogOut size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </header>
   );
 }
-
