@@ -83,7 +83,7 @@ class UserOut(ORMModel):
     updated_at: datetime
 
 
-class PublicUserOut(BaseModel):
+class PublicUserOut(ORMModel):
     id: int
     full_name: str
     profile_picture: Optional[str] = None

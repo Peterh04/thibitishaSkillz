@@ -90,7 +90,7 @@ def apply_to_job(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already applied for this job")
-    return _detail(_load_application(db, application.id), include_email=False)
+    return _detail(db, _load_application(db, application.id), include_email=False)
 
 
 @router.get("/applications/my-applications", response_model=ApplicationListResponse)
@@ -144,7 +144,7 @@ def job_applications(
 @router.get("/applications/{application_id}", response_model=ApplicationDetail)
 def get_application(
     application_id: int,
-    current_user: User = Depends(get_db and require_roles(UserRole.job_seeker, UserRole.employer, UserRole.admin)),
+    current_user: User = Depends(require_roles(UserRole.job_seeker, UserRole.employer, UserRole.admin)),
     db: Session = Depends(get_db),
 ):
     application = _load_application(db, application_id)
@@ -153,7 +153,7 @@ def get_application(
     is_candidate = application.candidate_id == current_user.id
     if not is_candidate and not _can_manage(current_user, application):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
-    return _detail(application, include_email=_can_manage(current_user, application))
+    return _detail(db, application, include_email=_can_manage(current_user, application))
 
 
 @router.put("/applications/{application_id}/status", response_model=ApplicationDetail)
@@ -171,20 +171,13 @@ def update_application_status(
     db.commit()
     db.refresh(application)
     application = _load_application(db, application.id)
-    return _detail(application, include_email=True)
+    return _detail(db, application, include_email=True)
 
 
-def _detail(application: JobApplication, include_email: bool) -> ApplicationDetail:
+def _detail(db: Session, application: JobApplication, include_email: bool) -> ApplicationDetail:
     match_skills = []
     if application.job:
-        from backend.database import SessionLocal
-        from backend.services.matching_service import match_candidate_to_job as build_match
-
-        db = SessionLocal()
-        try:
-            match_skills = build_match(db, application.job, application.candidate_id)["skills"]
-        finally:
-            db.close()
+        match_skills = match_candidate_to_job(db, application.job, application.candidate_id)["skills"]
     return ApplicationDetail(
         **_application_out(application).model_dump(),
         skills=match_skills,

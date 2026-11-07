@@ -73,7 +73,7 @@ def _client():
         from google.genai import types
     except ImportError as exc:
         raise GeminiError("The Google Gemini client is not installed.") from exc
-    return genai.Client(api_key=settings.GEMINI_API_KEY.strip()), types
+    return genai.Client(api_key=settings.GEMINI_API_KEY.strip(), http_options={"api_version": "v1beta"}), types
 
 
 def _extract_json(raw: str) -> dict:
