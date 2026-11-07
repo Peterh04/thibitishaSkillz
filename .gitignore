@@ -27,9 +27,13 @@ share/python-wheels/
 venv/
 ENV/
 
-# Environment Variables
+# Environment Variables & Secrets
 .env
-.env.local
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 # Database
 *.sqlite3
@@ -38,6 +42,16 @@ ENV/
 # Uploads
 backend/uploads/cvs/*
 !backend/uploads/cvs/.gitkeep
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # IDEs
 .idea/
@@ -53,4 +67,3 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
-
