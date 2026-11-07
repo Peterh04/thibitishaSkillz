@@ -33,8 +33,6 @@ python -m uvicorn backend.fastapi:app --reload
 
 Interactive API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-# ThibitishaSkillz
-
 ## Problem Statement
 
 Employers often rely heavily on CVs, qualifications and interviews to evaluate applicants, yet these methods do not always establish whether candidates genuinely possess the competencies required for a role, particularly in an era where AI can generate polished CVs, applications and interview responses.
