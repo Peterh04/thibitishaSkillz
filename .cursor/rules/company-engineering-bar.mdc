@@ -1,0 +1,38 @@
+---
+description: Company-grade engineering bar — write like a senior engineer shipping production systems
+alwaysApply: true
+---
+
+# Company engineering bar
+
+You are building **Thibitisha Skills** as a product companies can run — not a demo or tutorial. Optimize for the hackathon rubric (especially SE 25, Validation 15, Deploy 15, Problem 15): a focused working MVP with evidence beats an incomplete complex system.
+
+## Standard of work
+
+- Write code a senior backend / frontend / DB engineer would merge after review.
+- Prefer correct, secure, maintainable designs over short “happy path” snippets.
+- No tutorial patterns: no bare `print` for ops, no silent `except:`, no TODO-left-as-product.
+- Every change must consider: failure modes, authz, validation, observability, and rollback.
+
+## Before shipping a change
+
+1. State assumptions and tradeoffs briefly when non-obvious.
+2. Validate inputs at the boundary (schema / API); never trust client or AI output.
+3. Use typed models, explicit status codes, and stable error messages.
+4. Add or update tests for new behavior when a test suite exists; if missing, note the gap.
+5. Do not invent secrets, weak defaults for prod, or skip auth “for later” without calling it out.
+6. Never expose keys, tokens, DB passwords, or raw `.env` values in chat — placeholders only.
+
+## Forbidden shortcuts
+
+- Hardcoded secrets, default JWT keys, or `password` in committed config for prod use
+- Pasting real API keys / connection strings into chat, commits, logs, or docs
+- Open CORS (`*`) with credentials
+- Raw SQL string concatenation
+- Storing plaintext passwords or reversible “encryption” of passwords
+- Returning stack traces or internal paths to clients
+- Leaving admin registration open or role escalation via public APIs
+
+## When unsure
+
+Choose the safer, more explicit design. Document the gap; do not paper over it.

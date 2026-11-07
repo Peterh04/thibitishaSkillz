@@ -57,14 +57,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware — never pair allow_credentials with wildcard origins.
 origins = settings.cors_origins
 if not origins:
-    origins = ["*"]
+    raise RuntimeError(
+        "CORS_ORIGINS is empty. Set explicit frontend origins in backend/.env "
+        "(e.g. http://localhost:5173)."
+    )
+if any(origin.strip() == "*" for origin in origins):
+    raise RuntimeError(
+        "CORS_ORIGINS must not be '*" + "' when the API uses credentialed requests. "
+        "List exact frontend origins in backend/.env."
+    )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins if "*" not in origins else ["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,8 +103,20 @@ def root():
 
 @app.get("/health", tags=["Health"])
 def health_check():
+    db_ok = False
+    try:
+        from sqlalchemy import text
+
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+        "gemini_configured": settings.gemini_configured,
         "timestamp": utcnow().isoformat(),
     }
 

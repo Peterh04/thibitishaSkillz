@@ -1,0 +1,35 @@
+---
+description: Database engineering standards for MySQL/SQLAlchemy in this project
+globs: backend/models.py,backend/database.py,backend/seed.py,backend/**/migrations/**
+alwaysApply: false
+---
+
+# Database engineering
+
+Design like a DBA owning production MySQL.
+
+## Schema
+
+- Explicit types, lengths, nullability; FKs with correct `ondelete`.
+- Unique constraints for real business keys (email, candidate+skill, job+candidate, name_key).
+- Index columns used in filters/joins (`email`, `role`, `status`, FK columns, `is_current`).
+- Prefer string-backed enums with fixed length for portability (as in `models.py`).
+- JSON only for semi-structured blobs (CV analysis, MC options) — not for relational facts you query often.
+
+## Migrations & ops
+
+- Schema changes via Alembic (or equivalent) — never “edit prod tables by hand” as the process.
+- `create_all` is for local bootstrap only, not company deploy story.
+- Pool: `pool_pre_ping`, sensible `pool_recycle`; no unbounded connections.
+
+## Query quality
+
+- Avoid N+1: `joinedload` / `selectinload` on list/detail paths that touch relations.
+- No `SELECT *` into huge text columns when listing (e.g. CV `extracted_text`).
+- Rankings/verifications: keep `is_current` semantics consistent; recompute ranks in one place.
+
+## Data integrity
+
+- Passwords: bcrypt hashes only.
+- Soft rules in app must match DB constraints (unique apply, unique candidate skill).
+- Seed data must be idempotent and never overwrite production users.

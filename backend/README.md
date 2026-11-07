@@ -113,27 +113,14 @@ cp backend/.env.example backend/.env
 
 Configure your `.env` settings:
 
-```ini
-APP_NAME="Thibitisha Skills"
-DATABASE_URL="mysql+pymysql://root:your_mysql_password@localhost:3306/thibitisha_skills?charset=utf8mb4"
-JWT_SECRET_KEY="generate-a-secure-random-key-at-least-32-characters"
-JWT_ALGORITHM="HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
+Copy `backend/.env.example` → `backend/.env`, then set real values locally:
 
-GEMINI_API_KEY="your-google-gemini-api-key"
-GEMINI_MODEL="gemini-2.5-flash"
+- `DATABASE_URL` — your MySQL SQLAlchemy URL
+- `JWT_SECRET_KEY` — random string, 32+ chars (not a placeholder)
+- `GEMINI_API_KEY` — from Google AI Studio
+- Optional: `ADMIN_EMAIL` / `ADMIN_PASSWORD` for the seeded admin
 
-CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
-MAX_CV_SIZE_MB=5
-
-QUESTIONS_PER_ASSESSMENT=10
-PASS_PERCENTAGE=50.0
-MAX_ASSESSMENTS_PER_DAY=5
-
-ADMIN_EMAIL="admin@thibitishaskills.com"
-ADMIN_PASSWORD="ChangeMe123!"
-ADMIN_NAME="Platform Administrator"
-```
+Never commit `backend/.env`. See `.env.example` for the full key list.
 
 ---
 

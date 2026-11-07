@@ -1,0 +1,37 @@
+---
+description: Senior frontend craft — no AI slop UI; production React for Thibitisha Skills
+globs: frontend/**/*.{js,jsx,ts,tsx,css,html}
+alwaysApply: false
+---
+
+# Frontend — human senior craft (no slop)
+
+Ship UI like a product designer + senior React engineer built it for a real hiring company — not a Vite demo or generic AI landing page.
+
+## Anti-slop (forbidden defaults)
+
+- Purple-on-white / purple→indigo gradients, neon glow, glassmorphism stacks
+- Inter / Roboto / Arial / system-ui as the hero brand voice
+- Cookie-cutter card grids, pill chip clusters, fake stat strips, emoji decoration
+- Inset hero image cards, floating badges over media, dashboard-in-the-hero clutter
+- Leaving the Vite “Get started / Count is” scaffold in product routes
+
+## Design bar
+
+- One composition per first viewport: brand, one headline, one support line, one CTA group, one dominant visual
+- Brand first; expressive purposeful typography; atmospheric background (not flat gray)
+- Full-bleed hero when promotional; real imagery of product/context
+- One job per section; motion only for hierarchy (2–3 intentional motions), reduced-motion safe
+- CSS variables for a clear visual direction unique to Thibitisha
+
+## Engineering bar
+
+- Feature folders / routes (not one giant App.jsx); shared API client; auth-aware layout
+- Loading, empty, error, and success states on every data view
+- Accessible forms/labels; keyboard paths for login, apply, assessment
+- Handle 401/403/429/5xx; never put Gemini/DB/JWT secrets in the client
+- Responsive desktop + mobile; no horizontal overflow surprises
+
+## Before shipping UI
+
+Call MCP `frontend_audit` + `frontend_design_bar`. If it still looks like template AI UI, redesign — do not ship.
