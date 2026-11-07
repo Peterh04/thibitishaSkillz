@@ -69,21 +69,39 @@ def _parse_error(response: httpx.Response) -> MsingiError:
     )
 
 
-def create_speech(text: str, voice_id: str | None = None) -> bytes:
-    """POST /v1/audio/speech → WAV bytes. Text should be Kiswahili (1–2000 chars)."""
+def create_speech(text: str, voice_id: str | None = None, language: str | None = None) -> bytes:
+    """POST /v1/audio/speech → WAV bytes.
+
+    Msingi documents Kiswahili as the primary TTS language; English text is also
+    accepted by the same endpoint for bilingual interviews (quality may vary).
+    """
     cleaned = (text or "").strip()
     if not cleaned:
         raise MsingiError("Speech text is empty.")
     if len(cleaned) > 2000:
         cleaned = cleaned[:2000]
-    voice = (voice_id or settings.MSINGI_DEFAULT_VOICE_ID or "female3").strip()
+    voice = (voice_id or settings.MSINGI_DEFAULT_VOICE_ID or "female4").strip()
+    payload: dict[str, Any] = {"text": cleaned, "voice_id": voice}
+    # Optional hint only — ignored if the API rejects unknown fields (we strip on 422).
+    lang = (language or "").strip().lower()
+    if lang in {"sw", "en"}:
+        payload["language"] = lang
     try:
         response = httpx.post(
             f"{_base()}/v1/audio/speech",
             headers={**_headers(), "Content-Type": "application/json"},
-            json={"text": cleaned, "voice_id": voice},
+            json=payload,
             timeout=120.0,
         )
+        # Some workspaces may reject unknown "language" — retry without it.
+        if response.status_code == 422 and "language" in payload:
+            payload.pop("language", None)
+            response = httpx.post(
+                f"{_base()}/v1/audio/speech",
+                headers={**_headers(), "Content-Type": "application/json"},
+                json=payload,
+                timeout=120.0,
+            )
     except httpx.HTTPError as exc:
         logger.warning("Msingi TTS network error: %s", exc.__class__.__name__)
         raise MsingiError("MsingiAI speech service is unreachable.") from exc

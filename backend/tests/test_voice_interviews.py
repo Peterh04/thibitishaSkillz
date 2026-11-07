@@ -33,11 +33,13 @@ def mock_voice_questions():
             "question_sw": "Eleza uzoefu wako wa Python.",
             "question_en": "Describe your Python experience.",
             "expected_answer_sw": "Anataja FastAPI na miaka ya uzoefu.",
+            "expected_answer_en": "Mentions FastAPI and years of experience.",
         },
         {
             "question_sw": "Unashughulikiaje hitilafu katika API?",
             "question_en": "How do you handle errors in an API?",
             "expected_answer_sw": "Anataja exception handling na logging.",
+            "expected_answer_en": "Mentions exception handling and logging.",
         },
     ]
 
@@ -66,15 +68,17 @@ def test_voice_interview_flow_mocked(
         start = client.post(
             "/api/voice-interviews/start",
             headers=job_seeker_headers,
-            json={"skill_id": sample_skill.id, "cv_id": analyzed_cv.id},
+            json={"skill_id": sample_skill.id, "cv_id": analyzed_cv.id, "language": "sw"},
         )
         assert start.status_code == status.HTTP_201_CREATED, start.text
         body = start.json()
         interview_id = body["id"]
         assert body["status"] == "in_progress"
+        assert body["language"] == "sw"
         assert body["total_questions"] == 2
         assert body["current_turn_index"] == 0
         assert body["turns"][0]["question_text"].startswith("Eleza")
+        assert body["turns"][0]["question_text_en"].startswith("Describe")
         # Expected answers must not leak before scoring
         assert "expected_answer" not in (body["turns"][0].get("feedback") or "")
 
@@ -152,3 +156,37 @@ def test_employer_cannot_start_voice_interview(client, employer_headers, analyze
         json={"cv_id": analyzed_cv.id},
     )
     assert res.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_start_voice_interview_english(
+    client, job_seeker_headers, analyzed_cv, sample_skill, mock_voice_questions, tmp_path
+):
+    with patch(
+        "backend.services.voice_interview_service.generate_voice_interview_questions",
+        return_value=mock_voice_questions,
+    ) as gen, patch(
+        "backend.services.voice_interview_service.settings.GEMINI_API_KEY",
+        "test-gemini-key",
+    ), patch(
+        "backend.services.voice_interview_service.settings.UPLOAD_DIR",
+        str(tmp_path / "uploads"),
+    ):
+        start = client.post(
+            "/api/voice-interviews/start",
+            headers=job_seeker_headers,
+            json={"skill_id": sample_skill.id, "cv_id": analyzed_cv.id, "language": "en"},
+        )
+    assert start.status_code == status.HTTP_201_CREATED, start.text
+    body = start.json()
+    assert body["language"] == "en"
+    assert body["turns"][0]["question_text"].startswith("Describe")
+    assert gen.call_args.kwargs.get("language") == "en"
+
+
+def test_start_voice_interview_rejects_bad_language(client, job_seeker_headers, analyzed_cv):
+    res = client.post(
+        "/api/voice-interviews/start",
+        headers=job_seeker_headers,
+        json={"cv_id": analyzed_cv.id, "language": "fr"},
+    )
+    assert res.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

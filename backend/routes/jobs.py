@@ -234,13 +234,24 @@ def update_job(
         data["application_deadline"] = _naive(data["application_deadline"])
     for field, value in data.items():
         setattr(job, field, value)
+    became_published = False
     if new_status == JobStatus.published:
         _require_publishable(db, job)
+        became_published = job.status != JobStatus.published
         job.status = JobStatus.published
     elif new_status is not None:
         job.status = new_status
     job.updated_at = utcnow()
     db.commit()
+    if became_published:
+        try:
+            from backend.services.notification_service import notify_job_published
+
+            notify_job_published(db, current_user, job)
+        except Exception:
+            import logging
+
+            logging.getLogger("thibitisha.notifications").exception("Job publish SMS notify failed")
     return job_to_out(_load_job(db, job.id))
 
 

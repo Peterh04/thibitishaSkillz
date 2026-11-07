@@ -255,6 +255,24 @@ def submit_assessment(
     except GeminiError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    try:
+        from backend.config import settings as app_settings
+        from backend.services.notification_service import notify_assessment_completed
+
+        db.refresh(assessment)
+        percentage = float(assessment.percentage or 0)
+        notify_assessment_completed(
+            db,
+            current_user,
+            skill_name=assessment.skill.name if assessment.skill else "skill",
+            percentage=percentage,
+            passed=percentage >= app_settings.PASS_PERCENTAGE,
+            assessment_id=assessment.id,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger("thibitisha.notifications").exception("Assessment SMS notify failed")
     return _result(db, assessment)
 
 

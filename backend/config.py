@@ -50,9 +50,22 @@ class Settings(BaseSettings):
     # Docs: https://platform.msingiai.com/docs
     MSINGI_BASE_URL: str = "https://api.msingiai.com"
     MSINGI_API_KEY: str = ""
-    MSINGI_DEFAULT_VOICE_ID: str = "female3"
+    MSINGI_DEFAULT_VOICE_ID: str = "female4"
     VOICE_INTERVIEW_QUESTIONS: int = 5
     MAX_VOICE_ANSWER_SECONDS: int = 120
+
+    # ThriveVas / Thrive Wave SMS — leave disabled until a working API key is provided
+    # Docs: https://docs.thrivevas.com
+    THRIVE_SMS_ENABLED: bool = False
+    THRIVE_SMS_BASE_URL: str = "https://app.thrivevas.com"
+    THRIVE_SMS_SEND_PATH: str = "/"
+    THRIVE_SMS_API_KEY: str = ""
+    THRIVE_SMS_SHORT_CODE: str = ""
+    THRIVE_SMS_SENDER_ID: str = ""
+    THRIVE_SMS_ORIGIN: str = "API_INTERFACE"
+    # body_key | bearer | header_apikey — adjust when Thrive confirms auth style
+    THRIVE_SMS_AUTH_STYLE: str = "body_key"
+    THRIVE_SMS_DEFAULT_COUNTRY_CODE: str = "254"
 
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
     UPLOAD_DIR: str = ""
@@ -129,6 +142,10 @@ class Settings(BaseSettings):
     @property
     def msingi_configured(self) -> bool:
         return bool(self.MSINGI_API_KEY.strip())
+
+    @property
+    def sms_configured(self) -> bool:
+        return bool(self.THRIVE_SMS_ENABLED and self.THRIVE_SMS_API_KEY.strip())
 
     @property
     def voice_upload_path(self) -> Path:
